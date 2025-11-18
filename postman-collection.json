@@ -1,0 +1,327 @@
+{
+  "info": {
+    "name": "Communication Service API",
+    "description": "Complete API collection for Communication Service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "templateId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "bookmarkFieldId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "memberId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tenantId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & Info",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Service Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bookmark Fields",
+      "item": [
+        {
+          "name": "Get Bookmark Fields",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/bookmarks/fields",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "bookmarks", "fields"]
+            },
+            "description": "Get all bookmark fields"
+          }
+        },
+        {
+          "name": "Create Bookmark Field",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"memberName\",\n  \"label\": \"Member Name\",\n  \"path\": \"member.name\",\n  \"dataType\": \"string\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/bookmarks/fields",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "bookmarks", "fields"]
+            },
+            "description": "Create a new bookmark field. dataType can be: string, date, or number"
+          }
+        },
+        {
+          "name": "Update Bookmark Field",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"memberName\",\n  \"label\": \"Member Full Name\",\n  \"path\": \"member.fullName\",\n  \"dataType\": \"string\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/bookmarks/fields/{{bookmarkFieldId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "bookmarks", "fields", "{{bookmarkFieldId}}"]
+            },
+            "description": "Update a bookmark field. All fields are optional - only include fields you want to update"
+          }
+        },
+        {
+          "name": "Delete Bookmark Field",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/bookmarks/fields/{{bookmarkFieldId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "bookmarks", "fields", "{{bookmarkFieldId}}"]
+            },
+            "description": "Delete a bookmark field"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Templates",
+      "item": [
+        {
+          "name": "Upload Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "description": "Optional: OneDrive access token"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Upload a .docx file"
+                },
+                {
+                  "key": "name",
+                  "value": "Welcome Letter Template",
+                  "type": "text",
+                  "description": "Template name (required)"
+                },
+                {
+                  "key": "description",
+                  "value": "Template for welcome letters",
+                  "type": "text",
+                  "description": "Template description (optional)"
+                },
+                {
+                  "key": "category",
+                  "value": "letters",
+                  "type": "text",
+                  "description": "Template category (optional)"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/templates/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "templates", "upload"]
+            },
+            "description": "Upload a .docx template file to OneDrive and create a template record"
+          }
+        },
+        {
+          "name": "Get Templates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/templates?category=letters&tenantId={{tenantId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "templates"],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "letters",
+                  "description": "Filter by category (optional)"
+                },
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}",
+                  "description": "Filter by tenant ID (optional)"
+                }
+              ]
+            },
+            "description": "Get all templates. Optionally filter by category and tenantId"
+          }
+        },
+        {
+          "name": "Get Template",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/templates/{{templateId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "templates", "{{templateId}}"]
+            },
+            "description": "Get template details by ID"
+          }
+        },
+        {
+          "name": "Update Template",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Template Name\",\n  \"description\": \"Updated description\",\n  \"category\": \"updated-category\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/templates/{{templateId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "templates", "{{templateId}}"]
+            },
+            "description": "Update template metadata. All fields are optional - only include fields you want to update"
+          }
+        },
+        {
+          "name": "Delete Template",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/templates/{{templateId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "templates", "{{templateId}}"]
+            },
+            "description": "Delete a template"
+          }
+        },
+        {
+          "name": "Extract Placeholders",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "description": "Optional: OneDrive access token"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/templates/{{templateId}}/extract-placeholders",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "api",
+                "templates",
+                "{{templateId}}",
+                "extract-placeholders"
+              ]
+            },
+            "description": "Extract placeholders from a template file stored in OneDrive"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Letters",
+      "item": [
+        {
+          "name": "Generate Letter",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "description": "Optional: OneDrive access token"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"memberId\": \"{{memberId}}\",\n  \"templateId\": \"{{templateId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/letters/generate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "letters", "generate"]
+            },
+            "description": "Generate a letter from a template with member data. The template is fetched from OneDrive and merged with member data from bookmark fields."
+          }
+        }
+      ]
+    }
+  ]
+}
