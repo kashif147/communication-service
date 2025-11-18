@@ -44,6 +44,12 @@ class PolicyMiddleware {
         }
 
         // Extract context from request
+        // Filter out 'id' from body if it's not a route parameter to avoid validation issues
+        const bodyContext = { ...req.body };
+        if (!req.params?.id && bodyContext.id) {
+          delete bodyContext.id;
+        }
+        
         const context = {
           userId: req.ctx?.userId || req.user?.id || req.userId,
           tenantId: req.ctx?.tenantId || req.user?.tenantId || req.tenantId,
@@ -53,7 +59,7 @@ class PolicyMiddleware {
             req.user?.permissions ||
             req.permissions ||
             [],
-          ...req.body, // Include request body for additional context
+          ...bodyContext, // Include request body for additional context (id filtered if not route param)
         };
 
         // ALWAYS delegate authorization to user service - maintain single source of truth

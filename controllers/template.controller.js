@@ -22,7 +22,8 @@ export async function uploadTemplate(req, res, next) {
       return res.fail("No file uploaded. Please upload a .docx file", 400);
     }
 
-    const { name, description, category } = req.body;
+    const { name, description, category, id, ...rest } = req.body;
+    // Ignore 'id' field if present in body (not used for upload endpoint)
     const file = req.file;
 
     // Validate file type
