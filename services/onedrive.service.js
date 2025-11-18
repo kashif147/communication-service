@@ -1,5 +1,6 @@
 import { getGraphClient } from "../config/graph.js";
 import { getGraphAccessToken } from "./graphAuth.service.js";
+import logger from "../config/logger.js";
 
 /**
  * Download a file from OneDrive (Word .docx template)
@@ -26,7 +27,10 @@ export async function getOneDriveFile(fileId, accessToken) {
     // Convert ArrayBuffer to Node Buffer
     return Buffer.from(fileResponse);
   } catch (error) {
-    console.error("Failed to fetch OneDrive file:", error.message);
+    logger.error(
+      { error: error.message, fileId },
+      "Failed to fetch OneDrive file"
+    );
     throw error;
   }
 }
@@ -61,7 +65,10 @@ export async function uploadOneDriveFile(fileBuffer, fileName, accessToken) {
       size: fileResponse.size,
     };
   } catch (error) {
-    console.error("Failed to upload OneDrive file:", error.message);
+    logger.error(
+      { error: error.message, fileName },
+      "Failed to upload OneDrive file"
+    );
     throw error;
   }
 }

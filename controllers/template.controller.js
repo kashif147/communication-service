@@ -1,12 +1,23 @@
 import Template from "../model/template.model.js";
-import { getOneDriveFile, uploadOneDriveFile } from "../services/onedrive.service.js";
+import {
+  getOneDriveFile,
+  uploadOneDriveFile,
+} from "../services/onedrive.service.js";
 import PizZip from "pizzip";
 import pkg from "docxtemplater/expressions.js";
 const { extractExpressions } = pkg;
-import { validateObjectId, sanitizeString } from "../middlewares/validateInput.js";
+import {
+  validateObjectId,
+  sanitizeString,
+} from "../middlewares/validateInput.js";
 
 export async function uploadTemplate(req, res, next) {
   try {
+    // Validate userId and tenantId are available from token
+    if (!req.userId || !req.tenantId) {
+      return res.fail("User authentication required", 401);
+    }
+
     if (!req.file) {
       return res.fail("No file uploaded. Please upload a .docx file", 400);
     }
@@ -15,7 +26,10 @@ export async function uploadTemplate(req, res, next) {
     const file = req.file;
 
     // Validate file type
-    if (!file.mimetype.includes("wordprocessingml") && !file.originalname.endsWith(".docx")) {
+    if (
+      !file.mimetype.includes("wordprocessingml") &&
+      !file.originalname.endsWith(".docx")
+    ) {
       return res.fail("Invalid file type. Only .docx files are allowed", 400);
     }
 
@@ -24,11 +38,19 @@ export async function uploadTemplate(req, res, next) {
     }
 
     const sanitizedName = sanitizeString(name, 200);
-    const sanitizedDescription = description ? sanitizeString(description, 500) : undefined;
-    const sanitizedCategory = category ? sanitizeString(category, 100) : undefined;
+    const sanitizedDescription = description
+      ? sanitizeString(description, 500)
+      : undefined;
+    const sanitizedCategory = category
+      ? sanitizeString(category, 100)
+      : undefined;
 
     // Upload to OneDrive
-    const oneDriveFile = await uploadOneDriveFile(file.buffer, file.originalname, req.token);
+    const oneDriveFile = await uploadOneDriveFile(
+      file.buffer,
+      file.originalname,
+      req.token
+    );
 
     // Create template record
     const template = await Template.create({
@@ -36,8 +58,8 @@ export async function uploadTemplate(req, res, next) {
       description: sanitizedDescription,
       category: sanitizedCategory,
       fileId: oneDriveFile.fileId,
-      createdBy: req.userId || req.user?.id,
-      tenantId: req.tenantId || "default",
+      createdBy: req.userId, // From token
+      tenantId: req.tenantId, // From token
     });
 
     res.created({ template }, "Template uploaded successfully");
@@ -48,14 +70,15 @@ export async function uploadTemplate(req, res, next) {
 
 export async function getTemplates(req, res, next) {
   try {
-    const { category, tenantId } = req.query;
-    const filter = {};
-
-    if (tenantId) {
-      filter.tenantId = tenantId;
-    } else if (req.tenantId) {
-      filter.tenantId = req.tenantId;
+    // Validate userId and tenantId are available from token
+    if (!req.userId || !req.tenantId) {
+      return res.fail("User authentication required", 401);
     }
+
+    const { category } = req.query;
+    const filter = {
+      tenantId: req.tenantId, // Always filter by tenant from token
+    };
 
     if (category) {
       filter.category = sanitizeString(category, 100);
@@ -71,11 +94,21 @@ export async function getTemplates(req, res, next) {
 
 export async function getTemplate(req, res, next) {
   try {
+    // Validate userId and tenantId are available from token
+    if (!req.userId || !req.tenantId) {
+      return res.fail("User authentication required", 401);
+    }
+
     const { id } = req.params;
 
     validateObjectId(id, "id");
 
-    const template = await Template.findById(id);
+    // Ensure template belongs to user's tenant
+    const template = await Template.findOne({
+      _id: id,
+      tenantId: req.tenantId, // Tenant isolation
+    });
+
     if (!template) {
       return res.notFound("Template not found", { id });
     }
@@ -88,12 +121,22 @@ export async function getTemplate(req, res, next) {
 
 export async function updateTemplate(req, res, next) {
   try {
+    // Validate userId and tenantId are available from token
+    if (!req.userId || !req.tenantId) {
+      return res.fail("User authentication required", 401);
+    }
+
     const { id } = req.params;
     const { name, description, category } = req.body;
 
     validateObjectId(id, "id");
 
-    const template = await Template.findById(id);
+    // Ensure template belongs to user's tenant
+    const template = await Template.findOne({
+      _id: id,
+      tenantId: req.tenantId, // Tenant isolation
+    });
+
     if (!template) {
       return res.notFound("Template not found", { id });
     }
@@ -107,13 +150,23 @@ export async function updateTemplate(req, res, next) {
       updateData.name = sanitizedName;
     }
     if (description !== undefined) {
-      updateData.description = description ? sanitizeString(description, 500) : null;
+      updateData.description = description
+        ? sanitizeString(description, 500)
+        : null;
     }
     if (category !== undefined) {
       updateData.category = category ? sanitizeString(category, 100) : null;
     }
 
-    const updatedTemplate = await Template.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+    const updatedTemplate = await Template.findOneAndUpdate(
+      { _id: id, tenantId: req.tenantId }, // Tenant isolation
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedTemplate) {
+      return res.notFound("Template not found", { id });
+    }
 
     res.success({ template: updatedTemplate }, "Template updated successfully");
   } catch (error) {
@@ -126,11 +179,21 @@ export async function updateTemplate(req, res, next) {
 
 export async function deleteTemplate(req, res, next) {
   try {
+    // Validate userId and tenantId are available from token
+    if (!req.userId || !req.tenantId) {
+      return res.fail("User authentication required", 401);
+    }
+
     const { id } = req.params;
 
     validateObjectId(id, "id");
 
-    const template = await Template.findByIdAndDelete(id);
+    // Ensure template belongs to user's tenant
+    const template = await Template.findOneAndDelete({
+      _id: id,
+      tenantId: req.tenantId, // Tenant isolation
+    });
+
     if (!template) {
       return res.notFound("Template not found", { id });
     }
@@ -143,11 +206,21 @@ export async function deleteTemplate(req, res, next) {
 
 export async function extractPlaceholders(req, res, next) {
   try {
+    // Validate userId and tenantId are available from token
+    if (!req.userId || !req.tenantId) {
+      return res.fail("User authentication required", 401);
+    }
+
     const { id } = req.params;
 
     validateObjectId(id, "id");
 
-    const template = await Template.findById(id);
+    // Ensure template belongs to user's tenant
+    const template = await Template.findOne({
+      _id: id,
+      tenantId: req.tenantId, // Tenant isolation
+    });
+
     if (!template) {
       return res.notFound("Template not found", { id });
     }

@@ -8,14 +8,40 @@ import {
   extractPlaceholders,
 } from "../controllers/template.controller.js";
 import { upload } from "../middlewares/upload.mw.js";
+import { defaultPolicyMiddleware } from "../middlewares/policy.middleware.js";
 
 const router = Router();
 
-router.post("/upload", upload.single("file"), uploadTemplate);
-router.get("/", getTemplates);
-router.get("/:id", getTemplate);
-router.put("/:id", updateTemplate);
-router.delete("/:id", deleteTemplate);
-router.post("/:id/extract-placeholders", extractPlaceholders);
+router.post(
+  "/upload",
+  defaultPolicyMiddleware.requirePermission("communication", "create"),
+  upload.single("file"),
+  uploadTemplate
+);
+router.get(
+  "/",
+  defaultPolicyMiddleware.requirePermission("communication", "read"),
+  getTemplates
+);
+router.get(
+  "/:id",
+  defaultPolicyMiddleware.requirePermission("communication", "read"),
+  getTemplate
+);
+router.put(
+  "/:id",
+  defaultPolicyMiddleware.requirePermission("communication", "write"),
+  updateTemplate
+);
+router.delete(
+  "/:id",
+  defaultPolicyMiddleware.requirePermission("communication", "delete"),
+  deleteTemplate
+);
+router.post(
+  "/:id/extract-placeholders",
+  defaultPolicyMiddleware.requirePermission("communication", "write"),
+  extractPlaceholders
+);
 
 export default router;

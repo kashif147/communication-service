@@ -1,5 +1,6 @@
 import cors from "cors";
 import { AppError } from "../errors/AppError.js";
+import logger from "./logger.js";
 
 export const getCorsConfig = () => {
   const environment = process.env.NODE_ENV || "development";
@@ -42,7 +43,7 @@ export const getCorsConfig = () => {
       if (uniqueOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        console.warn(`CORS blocked origin: ${origin}`);
+        logger.warn({ origin, allowedOrigins: uniqueOrigins }, "CORS blocked origin");
         callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
       }
     },

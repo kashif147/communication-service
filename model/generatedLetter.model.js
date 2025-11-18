@@ -7,6 +7,7 @@ const GeneratedLetterSchema = new mongoose.Schema({
   blobPath: String,
   contentType: String,
   tenantId: String,
+  createdBy: String,
   createdAt: { type: Date, default: Date.now },
 });
 

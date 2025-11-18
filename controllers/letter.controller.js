@@ -15,6 +15,11 @@ import {
 
 export async function generateLetter(req, res, next) {
   try {
+    // Validate userId and tenantId are available from token
+    if (!req.userId || !req.tenantId) {
+      return res.fail("User authentication required", 401);
+    }
+
     const { memberId, templateId } = req.body;
 
     if (!memberId || !templateId) {
@@ -25,9 +30,14 @@ export async function generateLetter(req, res, next) {
     validateObjectId(templateId, "templateId");
     validateObjectId(memberId, "memberId");
 
-    const template = await Template.findById(templateId);
+    // Find template and ensure it belongs to user's tenant
+    const template = await Template.findOne({
+      _id: templateId,
+      tenantId: req.tenantId, // Tenant isolation - only templates from user's tenant
+    });
+
     if (!template) {
-      return res.notFound("Template not found", { templateId });
+      return res.notFound("Template not found or access denied", { templateId });
     }
 
     const templateBuffer = await getOneDriveFile(template.fileId, req.token);
@@ -35,7 +45,7 @@ export async function generateLetter(req, res, next) {
     const mergedDoc = mergeTemplate(templateBuffer, memberData);
 
     const fileName = `letter-${randomUUID()}.docx`;
-    const blobPath = `${req.tenantId || "default"}/${memberId}/${fileName}`;
+    const blobPath = `${req.tenantId}/${memberId}/${fileName}`;
 
     await uploadLetter(
       blobPath,
@@ -49,7 +59,8 @@ export async function generateLetter(req, res, next) {
       fileName,
       blobPath,
       contentType: "docx",
-      tenantId: req.tenantId || "default",
+      tenantId: req.tenantId, // From token
+      createdBy: req.userId, // From token
     });
 
     const downloadUrl = generateDownloadUrl(blobPath);

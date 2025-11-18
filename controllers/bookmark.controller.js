@@ -3,7 +3,15 @@ import { sanitizeString, validateObjectId } from "../middlewares/validateInput.j
 
 export async function getBookmarkFields(req, res, next) {
   try {
-    const fields = await BookmarkField.find();
+    // Validate userId and tenantId are available from token (for audit/logging)
+    // Bookmark fields are typically global configuration, but we track who accessed them
+    if (!req.userId || !req.tenantId) {
+      return res.fail("User authentication required", 401);
+    }
+
+    // Bookmark fields are typically global, but can be filtered by tenant if needed
+    // For now, return all fields (they're configuration data)
+    const fields = await BookmarkField.find().sort({ key: 1 });
     res.success({ fields }, "Bookmark fields retrieved successfully");
   } catch (error) {
     next(error);
@@ -12,6 +20,11 @@ export async function getBookmarkFields(req, res, next) {
 
 export async function createBookmarkField(req, res, next) {
   try {
+    // Validate userId and tenantId are available from token
+    if (!req.userId || !req.tenantId) {
+      return res.fail("User authentication required", 401);
+    }
+
     const { key, label, path, dataType } = req.body;
 
     if (!key || !label || !path) {
@@ -44,6 +57,11 @@ export async function createBookmarkField(req, res, next) {
 
 export async function updateBookmarkField(req, res, next) {
   try {
+    // Validate userId and tenantId are available from token
+    if (!req.userId || !req.tenantId) {
+      return res.fail("User authentication required", 401);
+    }
+
     const { id } = req.params;
     const { key, label, path, dataType } = req.body;
 
@@ -95,6 +113,11 @@ export async function updateBookmarkField(req, res, next) {
 
 export async function deleteBookmarkField(req, res, next) {
   try {
+    // Validate userId and tenantId are available from token
+    if (!req.userId || !req.tenantId) {
+      return res.fail("User authentication required", 401);
+    }
+
     const { id } = req.params;
 
     validateObjectId(id, "id");

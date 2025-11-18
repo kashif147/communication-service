@@ -1,5 +1,6 @@
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
+import logger from "../config/logger.js";
 
 export function mergeTemplate(templateBuffer, data) {
   const zip = new PizZip(templateBuffer);
@@ -14,7 +15,10 @@ export function mergeTemplate(templateBuffer, data) {
   try {
     doc.render();
   } catch (error) {
-    console.error("Error rendering docx", error);
+    logger.error(
+      { error: error.message, stack: error.stack },
+      "Error rendering docx template"
+    );
     throw error;
   }
 
