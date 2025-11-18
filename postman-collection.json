@@ -1,39 +1,40 @@
 {
   "info": {
     "name": "Communication Service API",
-    "description": "Complete API collection for Communication Service",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    "description": "Complete API collection for Communication Service with authentication",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "2.0.0"
   },
   "variable": [
     {
       "key": "baseUrl",
       "value": "http://localhost:4000",
-      "type": "string"
-    },
-    {
-      "key": "templateId",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "bookmarkFieldId",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "memberId",
-      "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Base URL for the Communication Service"
     },
     {
       "key": "authToken",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "JWT Bearer token from user-service. Required for all authenticated endpoints. userId and tenantId are extracted from this token automatically."
     },
     {
-      "key": "tenantId",
+      "key": "templateId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Template ID (24-character MongoDB ObjectId)"
+    },
+    {
+      "key": "bookmarkFieldId",
+      "value": "",
+      "type": "string",
+      "description": "Bookmark Field ID (24-character MongoDB ObjectId)"
+    },
+    {
+      "key": "memberId",
+      "value": "",
+      "type": "string",
+      "description": "Member ID (24-character MongoDB ObjectId) for whom the letter is being generated"
     }
   ],
   "item": [
@@ -49,8 +50,10 @@
               "raw": "{{baseUrl}}/health",
               "host": ["{{baseUrl}}"],
               "path": ["health"]
-            }
-          }
+            },
+            "description": "Health check endpoint. No authentication required."
+          },
+          "response": []
         },
         {
           "name": "Service Info",
@@ -61,8 +64,10 @@
               "raw": "{{baseUrl}}/",
               "host": ["{{baseUrl}}"],
               "path": [""]
-            }
-          }
+            },
+            "description": "Get service information and available endpoints. No authentication required."
+          },
+          "response": []
         }
       ]
     },
@@ -73,14 +78,22 @@
           "name": "Get Bookmark Fields",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text",
+                "description": "JWT Bearer token (required). userId and tenantId are extracted from token."
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/bookmarks/fields",
               "host": ["{{baseUrl}}"],
               "path": ["api", "bookmarks", "fields"]
             },
-            "description": "Get all bookmark fields"
-          }
+            "description": "Get all bookmark fields. Requires 'communication:read' permission.\n\n**Note:** userId and tenantId are automatically extracted from the JWT token - no need to provide them in the request."
+          },
+          "response": []
         },
         {
           "name": "Create Bookmark Field",
@@ -88,21 +101,34 @@
             "method": "POST",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text",
+                "description": "JWT Bearer token (required). userId and tenantId are extracted from token."
+              },
+              {
                 "key": "Content-Type",
-                "value": "application/json"
+                "value": "application/json",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"key\": \"memberName\",\n  \"label\": \"Member Name\",\n  \"path\": \"member.name\",\n  \"dataType\": \"string\"\n}"
+              "raw": "{\n  \"key\": \"memberName\",\n  \"label\": \"Member Name\",\n  \"path\": \"profile.personalInfo.forename\",\n  \"dataType\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/bookmarks/fields",
               "host": ["{{baseUrl}}"],
               "path": ["api", "bookmarks", "fields"]
             },
-            "description": "Create a new bookmark field. dataType can be: string, date, or number"
-          }
+            "description": "Create a new bookmark field. Requires 'communication:create' permission.\n\n**Required Fields:**\n- `key`: Unique identifier for the bookmark field (max 100 chars)\n- `label`: Human-readable label (max 200 chars)\n- `path`: JSON path to the data field (max 500 chars)\n\n**Optional Fields:**\n- `dataType`: Type of data - must be one of: `string`, `date`, or `number` (default: `string`)\n\n**Note:** userId and tenantId are automatically extracted from the JWT token - no need to provide them in the request."
+          },
+          "response": []
         },
         {
           "name": "Update Bookmark Field",
@@ -110,34 +136,55 @@
             "method": "PUT",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text",
+                "description": "JWT Bearer token (required). userId and tenantId are extracted from token."
+              },
+              {
                 "key": "Content-Type",
-                "value": "application/json"
+                "value": "application/json",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"key\": \"memberName\",\n  \"label\": \"Member Full Name\",\n  \"path\": \"member.fullName\",\n  \"dataType\": \"string\"\n}"
+              "raw": "{\n  \"label\": \"Member Full Name\",\n  \"path\": \"profile.personalInfo.fullName\",\n  \"dataType\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/bookmarks/fields/{{bookmarkFieldId}}",
               "host": ["{{baseUrl}}"],
               "path": ["api", "bookmarks", "fields", "{{bookmarkFieldId}}"]
             },
-            "description": "Update a bookmark field. All fields are optional - only include fields you want to update"
-          }
+            "description": "Update a bookmark field. Requires 'communication:write' permission.\n\n**All fields are optional** - only include fields you want to update:\n- `key`: Unique identifier (max 100 chars)\n- `label`: Human-readable label (max 200 chars)\n- `path`: JSON path to the data field (max 500 chars)\n- `dataType`: Type of data - `string`, `date`, or `number`\n\n**Note:** userId and tenantId are automatically extracted from the JWT token - no need to provide them in the request."
+          },
+          "response": []
         },
         {
           "name": "Delete Bookmark Field",
           "request": {
             "method": "DELETE",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text",
+                "description": "JWT Bearer token (required). userId and tenantId are extracted from token."
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/bookmarks/fields/{{bookmarkFieldId}}",
               "host": ["{{baseUrl}}"],
               "path": ["api", "bookmarks", "fields", "{{bookmarkFieldId}}"]
             },
-            "description": "Delete a bookmark field"
-          }
+            "description": "Delete a bookmark field. Requires 'communication:delete' permission.\n\n**Note:** userId and tenantId are automatically extracted from the JWT token - no need to provide them in the request."
+          },
+          "response": []
         }
       ]
     },
@@ -152,7 +199,8 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{authToken}}",
-                "description": "Optional: OneDrive access token"
+                "type": "text",
+                "description": "JWT Bearer token (required). userId and tenantId are extracted from token. Also used for OneDrive access if provided."
               }
             ],
             "body": {
@@ -162,25 +210,25 @@
                   "key": "file",
                   "type": "file",
                   "src": [],
-                  "description": "Upload a .docx file"
+                  "description": "Upload a .docx file (required, max 50MB)"
                 },
                 {
                   "key": "name",
                   "value": "Welcome Letter Template",
                   "type": "text",
-                  "description": "Template name (required)"
+                  "description": "Template name (required, max 200 chars)"
                 },
                 {
                   "key": "description",
-                  "value": "Template for welcome letters",
+                  "value": "Template for welcome letters to new members",
                   "type": "text",
-                  "description": "Template description (optional)"
+                  "description": "Template description (optional, max 500 chars)"
                 },
                 {
                   "key": "category",
                   "value": "letters",
                   "type": "text",
-                  "description": "Template category (optional)"
+                  "description": "Template category (optional, max 100 chars)"
                 }
               ]
             },
@@ -189,46 +237,58 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "templates", "upload"]
             },
-            "description": "Upload a .docx template file to OneDrive and create a template record"
-          }
+            "description": "Upload a .docx template file to OneDrive and create a template record. Requires 'communication:create' permission.\n\n**Required Fields:**\n- `file`: .docx file (max 50MB)\n- `name`: Template name (max 200 chars)\n\n**Optional Fields:**\n- `description`: Template description (max 500 chars)\n- `category`: Template category (max 100 chars)\n\n**Note:** \n- userId and tenantId are automatically extracted from the JWT token\n- Template is automatically associated with your tenant\n- File is uploaded to OneDrive and fileId is stored"
+          },
+          "response": []
         },
         {
           "name": "Get Templates",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text",
+                "description": "JWT Bearer token (required). userId and tenantId are extracted from token."
+              }
+            ],
             "url": {
-              "raw": "{{baseUrl}}/api/templates?category=letters&tenantId={{tenantId}}",
+              "raw": "{{baseUrl}}/api/templates?category=letters",
               "host": ["{{baseUrl}}"],
               "path": ["api", "templates"],
               "query": [
                 {
                   "key": "category",
                   "value": "letters",
-                  "description": "Filter by category (optional)"
-                },
-                {
-                  "key": "tenantId",
-                  "value": "{{tenantId}}",
-                  "description": "Filter by tenant ID (optional)"
+                  "description": "Filter by category (optional). Templates are automatically filtered by your tenantId from token."
                 }
               ]
             },
-            "description": "Get all templates. Optionally filter by category and tenantId"
-          }
+            "description": "Get all templates for your tenant. Requires 'communication:read' permission.\n\n**Query Parameters (optional):**\n- `category`: Filter by category\n\n**Note:** \n- Templates are automatically filtered by tenantId from your JWT token\n- You can only see templates from your own tenant"
+          },
+          "response": []
         },
         {
           "name": "Get Template",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text",
+                "description": "JWT Bearer token (required). userId and tenantId are extracted from token."
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/templates/{{templateId}}",
               "host": ["{{baseUrl}}"],
               "path": ["api", "templates", "{{templateId}}"]
             },
-            "description": "Get template details by ID"
-          }
+            "description": "Get template details by ID. Requires 'communication:read' permission.\n\n**Note:** \n- Template must belong to your tenant (tenantId from token)\n- Returns 404 if template not found or belongs to different tenant"
+          },
+          "response": []
         },
         {
           "name": "Update Template",
@@ -236,34 +296,55 @@
             "method": "PUT",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text",
+                "description": "JWT Bearer token (required). userId and tenantId are extracted from token."
+              },
+              {
                 "key": "Content-Type",
-                "value": "application/json"
+                "value": "application/json",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Updated Template Name\",\n  \"description\": \"Updated description\",\n  \"category\": \"updated-category\"\n}"
+              "raw": "{\n  \"name\": \"Updated Template Name\",\n  \"description\": \"Updated description for the template\",\n  \"category\": \"updated-category\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/templates/{{templateId}}",
               "host": ["{{baseUrl}}"],
               "path": ["api", "templates", "{{templateId}}"]
             },
-            "description": "Update template metadata. All fields are optional - only include fields you want to update"
-          }
+            "description": "Update template metadata. Requires 'communication:write' permission.\n\n**All fields are optional** - only include fields you want to update:\n- `name`: Template name (max 200 chars)\n- `description`: Template description (max 500 chars)\n- `category`: Template category (max 100 chars)\n\n**Note:** \n- Template must belong to your tenant (tenantId from token)\n- Returns 404 if template not found or belongs to different tenant"
+          },
+          "response": []
         },
         {
           "name": "Delete Template",
           "request": {
             "method": "DELETE",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text",
+                "description": "JWT Bearer token (required). userId and tenantId are extracted from token."
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/templates/{{templateId}}",
               "host": ["{{baseUrl}}"],
               "path": ["api", "templates", "{{templateId}}"]
             },
-            "description": "Delete a template"
-          }
+            "description": "Delete a template. Requires 'communication:delete' permission.\n\n**Note:** \n- Template must belong to your tenant (tenantId from token)\n- Returns 404 if template not found or belongs to different tenant\n- OneDrive file is NOT deleted, only the template record is removed"
+          },
+          "response": []
         },
         {
           "name": "Extract Placeholders",
@@ -273,9 +354,24 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{authToken}}",
-                "description": "Optional: OneDrive access token"
+                "type": "text",
+                "description": "JWT Bearer token (required). userId and tenantId are extracted from token. Also used for OneDrive access."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": {
               "raw": "{{baseUrl}}/api/templates/{{templateId}}/extract-placeholders",
               "host": ["{{baseUrl}}"],
@@ -286,8 +382,9 @@
                 "extract-placeholders"
               ]
             },
-            "description": "Extract placeholders from a template file stored in OneDrive"
-          }
+            "description": "Extract placeholders from a template file stored in OneDrive. Requires 'communication:write' permission.\n\n**Request Body:** Empty object `{}`\n\n**Note:** \n- Template must belong to your tenant (tenantId from token)\n- Downloads template from OneDrive and extracts all placeholders\n- Placeholders are saved to the template record\n- Returns array of placeholder names found in the template"
+          },
+          "response": []
         }
       ]
     },
@@ -300,26 +397,34 @@
             "method": "POST",
             "header": [
               {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
                 "key": "Authorization",
                 "value": "Bearer {{authToken}}",
-                "description": "Optional: OneDrive access token"
+                "type": "text",
+                "description": "JWT Bearer token (required). userId and tenantId are extracted from token. Also used for OneDrive access."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"memberId\": \"{{memberId}}\",\n  \"templateId\": \"{{templateId}}\"\n}"
+              "raw": "{\n  \"memberId\": \"507f1f77bcf86cd799439011\",\n  \"templateId\": \"507f1f77bcf86cd799439012\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/letters/generate",
               "host": ["{{baseUrl}}"],
               "path": ["api", "letters", "generate"]
             },
-            "description": "Generate a letter from a template with member data. The template is fetched from OneDrive and merged with member data from bookmark fields."
-          }
+            "description": "Generate a letter from a template with member data. Requires 'communication:create' permission.\n\n**Required Fields:**\n- `memberId`: Member ID (24-character MongoDB ObjectId) - the member for whom the letter is being generated\n- `templateId`: Template ID (24-character MongoDB ObjectId) - the template to use\n\n**Process:**\n1. Fetches template from OneDrive\n2. Collects member data from profile-service, subscription-service, and account-service\n3. Merges template with member data using bookmark fields\n4. Uploads generated letter to Azure Blob Storage\n5. Returns download URL\n\n**Note:** \n- Template must belong to your tenant (tenantId from token)\n- userId and tenantId are automatically extracted from the JWT token\n- Generated letter is stored in Azure Blob Storage with path: `{tenantId}/{memberId}/{fileName}`\n- Download URL is valid for 1 hour"
+          },
+          "response": []
         }
       ]
     }

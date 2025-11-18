@@ -44,10 +44,15 @@ class PolicyMiddleware {
         }
 
         // Extract context from request
-        // Filter out 'id' from body if it's not a route parameter to avoid validation issues
+        // Filter out 'id' from body/query if it's not a route parameter to avoid validation issues
+        // The 'id' field should only come from route parameters (req.params.id)
         const bodyContext = { ...req.body };
-        if (!req.params?.id && bodyContext.id) {
+        const queryContext = { ...req.query };
+        
+        // Remove 'id' from body and query unless it's a route parameter
+        if (!req.params?.id) {
           delete bodyContext.id;
+          delete queryContext.id;
         }
         
         const context = {
@@ -59,8 +64,14 @@ class PolicyMiddleware {
             req.user?.permissions ||
             req.permissions ||
             [],
-          ...bodyContext, // Include request body for additional context (id filtered if not route param)
+          ...queryContext, // Include query params (id filtered if not route param)
+          ...bodyContext, // Include request body (id filtered if not route param)
         };
+        
+        // Final safety check: remove 'id' from context if it's not from route params
+        if (!req.params?.id && context.id) {
+          delete context.id;
+        }
 
         // ALWAYS delegate authorization to user service - maintain single source of truth
         logger.debug(
