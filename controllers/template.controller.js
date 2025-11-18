@@ -1,7 +1,7 @@
 import Template from "../model/template.model.js";
 import { getOneDriveFile, uploadOneDriveFile } from "../services/onedrive.service.js";
 import PizZip from "pizzip";
-import { extractExpressions } from "docxtemplater/expressions";
+import { extractExpressions } from "docxtemplater/expressions.js";
 import { validateObjectId, sanitizeString } from "../middlewares/validateInput.js";
 
 export async function uploadTemplate(req, res, next) {
