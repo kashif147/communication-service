@@ -18,9 +18,20 @@ export async function getOneDriveFile(fileId, accessToken) {
     // Create Graph client
     const client = getGraphClient(token);
 
+    // Get user email for application permissions (if needed)
+    const userEmail = process.env.ONEDRIVE_USER_EMAIL;
+
     // Download the file using Graph API
+    // For application permissions, use user-specific path
+    let downloadPath;
+    if (userEmail) {
+      downloadPath = `/users/${userEmail}/drive/items/${fileId}/content`;
+    } else {
+      downloadPath = `/me/drive/items/${fileId}/content`;
+    }
+
     const fileResponse = await client
-      .api(`/me/drive/items/${fileId}/content`)
+      .api(downloadPath)
       .responseType("arraybuffer")
       .get();
 
@@ -28,7 +39,11 @@ export async function getOneDriveFile(fileId, accessToken) {
     return Buffer.from(fileResponse);
   } catch (error) {
     logger.error(
-      { error: error.message, fileId },
+      {
+        error: error.message,
+        fileId,
+        userEmail: process.env.ONEDRIVE_USER_EMAIL,
+      },
       "Failed to fetch OneDrive file"
     );
     throw error;
@@ -52,11 +67,45 @@ export async function uploadOneDriveFile(fileBuffer, fileName, accessToken) {
     // Create Graph client
     const client = getGraphClient(token);
 
-    // Upload the file to OneDrive root or a specific folder
-    const uploadPath = `/me/drive/root:/${fileName}:/content`;
-    const fileResponse = await client
-      .api(uploadPath)
-      .put(fileBuffer);
+    // Get the target folder ID from environment variable
+    // If not set, upload to root folder
+    const folderId = process.env.ONEDRIVE_TEMPLATE_FOLDER_ID;
+    const userEmail = process.env.ONEDRIVE_USER_EMAIL; // Optional: for application permissions
+
+    let uploadPath;
+    if (folderId) {
+      // For application permissions (client credentials), we may need user context
+      // Try direct folder access first, fallback to user-specific path if needed
+      if (userEmail) {
+        // Use user-specific path for application permissions
+        // Format: /users/{email}/drive/items/{folder-id}:/{filename}:/content
+        uploadPath = `/users/${userEmail}/drive/items/${folderId}:/${fileName}:/content`;
+        logger.debug(
+          { folderId, fileName, userEmail },
+          "Uploading to specific OneDrive folder (application permissions)"
+        );
+      } else {
+        // Try direct folder access (works for delegated permissions or if folder is accessible)
+        // Format: /me/drive/items/{folder-id}:/{filename}:/content
+        uploadPath = `/me/drive/items/${folderId}:/${fileName}:/content`;
+        logger.debug(
+          { folderId, fileName },
+          "Uploading to specific OneDrive folder (delegated permissions)"
+        );
+      }
+    } else {
+      // Fallback to root folder
+      if (userEmail) {
+        uploadPath = `/users/${userEmail}/drive/root:/${fileName}:/content`;
+      } else {
+        uploadPath = `/me/drive/root:/${fileName}:/content`;
+      }
+      logger.warn(
+        "ONEDRIVE_TEMPLATE_FOLDER_ID not set, uploading to root folder"
+      );
+    }
+
+    const fileResponse = await client.api(uploadPath).put(fileBuffer);
 
     return {
       fileId: fileResponse.id,
@@ -66,7 +115,12 @@ export async function uploadOneDriveFile(fileBuffer, fileName, accessToken) {
     };
   } catch (error) {
     logger.error(
-      { error: error.message, fileName },
+      {
+        error: error.message,
+        fileName,
+        folderId: process.env.ONEDRIVE_TEMPLATE_FOLDER_ID,
+        userEmail: process.env.ONEDRIVE_USER_EMAIL,
+      },
       "Failed to upload OneDrive file"
     );
     throw error;
