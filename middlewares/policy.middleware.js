@@ -1,12 +1,16 @@
 /**
  * Centralized RBAC Policy Middleware
- * Pure ESM implementation
+ * Uses shared policy middleware package
  *
  * This middleware integrates with the centralized policy evaluation service
  * using the policy client for consistent authorization across all microservices.
  */
 
-import PolicyClient from "./policyClient.js";
+// Use createRequire to import CommonJS modules in ESM
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+
+const { PolicyClient } = require("@membership/policy-middleware/client");
 import logger from "../config/logger.js";
 
 class PolicyMiddleware {

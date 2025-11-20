@@ -13,6 +13,7 @@
   "dependencies": {
     "@azure/storage-blob": "^12.22.0",
     "@microsoft/microsoft-graph-client": "^3.0.7",
+    "@membership/policy-middleware": "github:kashif147/policy-middleware",
     "@projectShell/rabbitmq-middleware": "github:kashif147/rabbitmq-middleware",
     "amqplib": "^0.10.9",
     "angular-expressions": "^1.1.2",

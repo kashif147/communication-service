@@ -1,16 +1,16 @@
 {
   "info": {
     "name": "Communication Service API",
-    "description": "Complete API collection for Communication Service with authentication",
+    "description": "Complete API collection for Communication Service with authentication and OneDrive integration.\n\n**Setup Requirements:**\n- JWT Bearer token from user-service for authentication\n- Microsoft Graph API configured for OneDrive/SharePoint access\n- See GRAPH_API_SETUP.md for Graph API configuration\n\n**Environment Variables (Service):**\n- GRAPH_CLIENT_ID: Microsoft Graph App Registration Client ID\n- GRAPH_CLIENT_SECRET: Microsoft Graph App Registration Client Secret\n- GRAPH_TENANT_ID: Azure AD Tenant ID\n- ONEDRIVE_TEMPLATE_FOLDER_ID: OneDrive/SharePoint folder ID for template storage\n- ONEDRIVE_USER_EMAIL: (Optional) User email for application permissions",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "version": "2.0.0"
+    "version": "2.1.0"
   },
   "variable": [
     {
       "key": "baseUrl",
       "value": "http://localhost:4000",
       "type": "string",
-      "description": "Base URL for the Communication Service"
+      "description": "Base URL for the Communication Service. For Azure: https://communicationserviceshell-eab5cfgdbccnf6b0.northeurope-01.azurewebsites.net"
     },
     {
       "key": "authToken",
@@ -237,7 +237,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "templates", "upload"]
             },
-            "description": "Upload a .docx template file to OneDrive and create a template record. Requires 'communication:create' permission.\n\n**Required Fields:**\n- `file`: .docx file (max 50MB)\n- `name`: Template name (max 200 chars)\n\n**Optional Fields:**\n- `description`: Template description (max 500 chars)\n- `category`: Template category (max 100 chars)\n\n**Note:** \n- userId and tenantId are automatically extracted from the JWT token\n- Template is automatically associated with your tenant\n- File is uploaded to OneDrive and fileId is stored"
+            "description": "Upload a .docx template file to OneDrive/SharePoint and create a template record. Requires 'communication:create' permission.\n\n**Required Fields:**\n- `file`: .docx file (max 50MB)\n- `name`: Template name (max 200 chars)\n\n**Optional Fields:**\n- `description`: Template description (max 500 chars)\n- `category`: Template category (max 100 chars)\n\n**File Storage:**\n- Files are uploaded to OneDrive/SharePoint folder configured via `ONEDRIVE_TEMPLATE_FOLDER_ID` environment variable\n- If folder ID is not configured, files are uploaded to the authenticated user's OneDrive root folder\n- The OneDrive file ID is stored in the template record\n\n**Important Notes:** \n- userId and tenantId are automatically extracted from the JWT token\n- Template is automatically associated with your tenant\n- Microsoft Graph API must be configured with proper permissions (Files.ReadWrite.All)\n- See GRAPH_API_SETUP.md for Graph API configuration details\n- Do NOT include an `id` field in the request body (it will be automatically filtered out)\n- The `id` field in form data is ignored to prevent ObjectId validation errors"
           },
           "response": []
         },
@@ -321,7 +321,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "templates", "{{templateId}}"]
             },
-            "description": "Update template metadata. Requires 'communication:write' permission.\n\n**All fields are optional** - only include fields you want to update:\n- `name`: Template name (max 200 chars)\n- `description`: Template description (max 500 chars)\n- `category`: Template category (max 100 chars)\n\n**Note:** \n- Template must belong to your tenant (tenantId from token)\n- Returns 404 if template not found or belongs to different tenant"
+            "description": "Update template metadata. Requires 'communication:write' permission.\n\n**All fields are optional** - only include fields you want to update:\n- `name`: Template name (max 200 chars)\n- `description`: Template description (max 500 chars)\n- `category`: Template category (max 100 chars)\n\n**Note:** \n- Template must belong to your tenant (tenantId from token)\n- Returns 404 if template not found or belongs to different tenant\n- OneDrive file is NOT updated, only the template metadata"
           },
           "response": []
         },
@@ -342,7 +342,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "templates", "{{templateId}}"]
             },
-            "description": "Delete a template. Requires 'communication:delete' permission.\n\n**Note:** \n- Template must belong to your tenant (tenantId from token)\n- Returns 404 if template not found or belongs to different tenant\n- OneDrive file is NOT deleted, only the template record is removed"
+            "description": "Delete a template. Requires 'communication:delete' permission.\n\n**Note:** \n- Template must belong to your tenant (tenantId from token)\n- Returns 404 if template not found or belongs to different tenant\n- OneDrive file is NOT deleted, only the template record is removed from the database"
           },
           "response": []
         },
@@ -382,7 +382,7 @@
                 "extract-placeholders"
               ]
             },
-            "description": "Extract placeholders from a template file stored in OneDrive. Requires 'communication:write' permission.\n\n**Request Body:** Empty object `{}`\n\n**Note:** \n- Template must belong to your tenant (tenantId from token)\n- Downloads template from OneDrive and extracts all placeholders\n- Placeholders are saved to the template record\n- Returns array of placeholder names found in the template"
+            "description": "Extract placeholders from a template file stored in OneDrive. Requires 'communication:write' permission.\n\n**Request Body:** Empty object `{}`\n\n**Process:**\n1. Downloads the template file from OneDrive using the stored fileId\n2. Parses the .docx file to extract all placeholder expressions\n3. Saves the extracted placeholders to the template record\n4. Returns the array of placeholder names\n\n**Note:** \n- Template must belong to your tenant (tenantId from token)\n- Downloads template from OneDrive and extracts all placeholders using docxtemplater\n- Placeholders are saved to the template record\n- Returns array of placeholder names found in the template (e.g., `{memberName}`, `{date}`)\n- Microsoft Graph API must be configured for OneDrive access"
           },
           "response": []
         }
@@ -422,7 +422,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "letters", "generate"]
             },
-            "description": "Generate a letter from a template with member data. Requires 'communication:create' permission.\n\n**Required Fields:**\n- `memberId`: Member ID (24-character MongoDB ObjectId) - the member for whom the letter is being generated\n- `templateId`: Template ID (24-character MongoDB ObjectId) - the template to use\n\n**Process:**\n1. Fetches template from OneDrive\n2. Collects member data from profile-service, subscription-service, and account-service\n3. Merges template with member data using bookmark fields\n4. Uploads generated letter to Azure Blob Storage\n5. Returns download URL\n\n**Note:** \n- Template must belong to your tenant (tenantId from token)\n- userId and tenantId are automatically extracted from the JWT token\n- Generated letter is stored in Azure Blob Storage with path: `{tenantId}/{memberId}/{fileName}`\n- Download URL is valid for 1 hour"
+            "description": "Generate a letter from a template with member data. Requires 'communication:create' permission.\n\n**Required Fields:**\n- `memberId`: Member ID (24-character MongoDB ObjectId) - the member for whom the letter is being generated\n- `templateId`: Template ID (24-character MongoDB ObjectId) - the template to use\n\n**Process:**\n1. Validates template and member IDs (ObjectId format)\n2. Fetches template file from OneDrive using stored fileId\n3. Collects member data from profile-service, subscription-service, and account-service\n4. Merges template with member data using bookmark fields mapping\n5. Uploads generated letter to Azure Blob Storage\n6. Creates a record in the database\n7. Returns download URL (valid for 1 hour)\n\n**Response:**\n- `letterId`: Generated letter record ID\n- `downloadUrl`: Azure Blob Storage SAS URL (valid for 1 hour)\n- `fileName`: Generated file name\n- `memberId`: Member ID\n- `templateId`: Template ID used\n\n**Note:** \n- Template must belong to your tenant (tenantId from token)\n- userId and tenantId are automatically extracted from the JWT token\n- Generated letter is stored in Azure Blob Storage with path: `{tenantId}/{memberId}/{fileName}`\n- Download URL is valid for 1 hour\n- Microsoft Graph API must be configured for OneDrive template access\n- Azure Blob Storage must be configured for letter storage"
           },
           "response": []
         }
