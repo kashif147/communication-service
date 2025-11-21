@@ -6,11 +6,7 @@
  * using the policy client for consistent authorization across all microservices.
  */
 
-// Use createRequire to import CommonJS modules in ESM
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-
-const PolicyClient = require("@membership/policy-middleware/client");
+import { PolicyClient } from "@membership/policy-middleware";
 import logger from "../config/logger.js";
 
 class PolicyMiddleware {
@@ -52,13 +48,13 @@ class PolicyMiddleware {
         // The 'id' field should only come from route parameters (req.params.id)
         const bodyContext = { ...req.body };
         const queryContext = { ...req.query };
-        
+
         // Remove 'id' from body and query unless it's a route parameter
         if (!req.params?.id) {
           delete bodyContext.id;
           delete queryContext.id;
         }
-        
+
         const context = {
           userId: req.ctx?.userId || req.user?.id || req.userId,
           tenantId: req.ctx?.tenantId || req.user?.tenantId || req.tenantId,
@@ -71,7 +67,7 @@ class PolicyMiddleware {
           ...queryContext, // Include query params (id filtered if not route param)
           ...bodyContext, // Include request body (id filtered if not route param)
         };
-        
+
         // Final safety check: remove 'id' from context if it's not from route params
         if (!req.params?.id && context.id) {
           delete context.id;
