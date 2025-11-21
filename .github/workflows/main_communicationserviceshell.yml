@@ -4,10 +4,11 @@
 name: Build and deploy Node.js app to Azure Web App - communicationServiceShell
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+  # Disabled - using azure-deploy.yml instead
+  # push:
+  #   branches:
+  #     - main
+  workflow_dispatch:  # Keep manual trigger option
 
 jobs:
   build:
