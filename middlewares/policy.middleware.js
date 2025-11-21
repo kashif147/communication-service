@@ -10,7 +10,7 @@
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 
-const { PolicyClient } = require("@membership/policy-middleware/client");
+const PolicyClient = require("@membership/policy-middleware/client");
 import logger from "../config/logger.js";
 
 class PolicyMiddleware {
