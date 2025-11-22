@@ -3,10 +3,13 @@ import { getGraphAccessToken } from "./graphAuth.service.js";
 import logger from "../config/logger.js";
 
 /**
- * Download a file from OneDrive (Word .docx template)
+ * Download a file from OneDrive/SharePoint (Word .docx template)
  * using Microsoft Graph API.
+ * 
+ * Files are accessed from a shared folder via admin account,
+ * not from individual user accounts.
  *
- * @param {string} fileId - The OneDrive file ID
+ * @param {string} fileId - The OneDrive/SharePoint file ID
  * @param {string} [accessToken] - Optional access token. If not provided, will fetch one automatically
  * @returns {Buffer} - The binary content of the file
  */
@@ -18,16 +21,31 @@ export async function getOneDriveFile(fileId, accessToken) {
     // Create Graph client
     const client = getGraphClient(token);
 
-    // Get user email for application permissions (if needed)
-    const userEmail = process.env.ONEDRIVE_USER_EMAIL;
+    // Get admin email for accessing shared folder (required for application permissions)
+    const adminEmail = process.env.ONEDRIVE_USER_EMAIL;
+    const sharePointSiteId = process.env.SHAREPOINT_SITE_ID;
 
-    // Download the file using Graph API
-    // For application permissions, use user-specific path
+    // Build download path based on configuration
     let downloadPath;
-    if (userEmail) {
-      downloadPath = `/users/${userEmail}/drive/items/${fileId}/content`;
+    
+    if (sharePointSiteId) {
+      // SharePoint site path
+      downloadPath = `/sites/${sharePointSiteId}/drive/items/${fileId}/content`;
+      logger.debug(
+        { fileId, sharePointSiteId },
+        "Downloading from SharePoint site"
+      );
+    } else if (adminEmail) {
+      // OneDrive shared folder via admin account
+      downloadPath = `/users/${adminEmail}/drive/items/${fileId}/content`;
+      logger.debug(
+        { fileId, adminEmail },
+        "Downloading from OneDrive shared folder via admin account"
+      );
     } else {
-      downloadPath = `/me/drive/items/${fileId}/content`;
+      throw new Error(
+        "ONEDRIVE_USER_EMAIL or SHAREPOINT_SITE_ID must be configured for shared folder access"
+      );
     }
 
     const fileResponse = await client
@@ -42,17 +60,21 @@ export async function getOneDriveFile(fileId, accessToken) {
       {
         error: error.message,
         fileId,
-        userEmail: process.env.ONEDRIVE_USER_EMAIL,
+        adminEmail: process.env.ONEDRIVE_USER_EMAIL,
+        sharePointSiteId: process.env.SHAREPOINT_SITE_ID,
       },
-      "Failed to fetch OneDrive file"
+      "Failed to fetch file from shared folder"
     );
     throw error;
   }
 }
 
 /**
- * Upload a file to OneDrive (Word .docx template)
+ * Upload a file to OneDrive/SharePoint shared folder (Word .docx template)
  * using Microsoft Graph API.
+ * 
+ * Files are uploaded to a shared folder accessible to all users via admin account,
+ * not to individual user accounts.
  *
  * @param {Buffer} fileBuffer - The file buffer to upload
  * @param {string} fileName - The name of the file
@@ -67,41 +89,37 @@ export async function uploadOneDriveFile(fileBuffer, fileName, accessToken) {
     // Create Graph client
     const client = getGraphClient(token);
 
-    // Get the target folder ID from environment variable
-    // If not set, upload to root folder
+    // Get configuration for shared folder access
     const folderId = process.env.ONEDRIVE_TEMPLATE_FOLDER_ID;
-    const userEmail = process.env.ONEDRIVE_USER_EMAIL; // Optional: for application permissions
+    const adminEmail = process.env.ONEDRIVE_USER_EMAIL; // Required: admin email with folder access
+    const sharePointSiteId = process.env.SHAREPOINT_SITE_ID; // Optional: for SharePoint sites
 
+    if (!folderId) {
+      throw new Error(
+        "ONEDRIVE_TEMPLATE_FOLDER_ID must be configured for shared folder upload"
+      );
+    }
+
+    // Build upload path based on configuration
     let uploadPath;
-    if (folderId) {
-      // For application permissions (client credentials), we may need user context
-      // Try direct folder access first, fallback to user-specific path if needed
-      if (userEmail) {
-        // Use user-specific path for application permissions
-        // Format: /users/{email}/drive/items/{folder-id}:/{filename}:/content
-        uploadPath = `/users/${userEmail}/drive/items/${folderId}:/${fileName}:/content`;
-        logger.debug(
-          { folderId, fileName, userEmail },
-          "Uploading to specific OneDrive folder (application permissions)"
-        );
-      } else {
-        // Try direct folder access (works for delegated permissions or if folder is accessible)
-        // Format: /me/drive/items/{folder-id}:/{filename}:/content
-        uploadPath = `/me/drive/items/${folderId}:/${fileName}:/content`;
-        logger.debug(
-          { folderId, fileName },
-          "Uploading to specific OneDrive folder (delegated permissions)"
-        );
-      }
+    
+    if (sharePointSiteId) {
+      // SharePoint site path - upload to shared folder on SharePoint site
+      uploadPath = `/sites/${sharePointSiteId}/drive/items/${folderId}:/${fileName}:/content`;
+      logger.debug(
+        { folderId, fileName, sharePointSiteId },
+        "Uploading to SharePoint site shared folder"
+      );
+    } else if (adminEmail) {
+      // OneDrive shared folder via admin account
+      uploadPath = `/users/${adminEmail}/drive/items/${folderId}:/${fileName}:/content`;
+      logger.debug(
+        { folderId, fileName, adminEmail },
+        "Uploading to OneDrive shared folder via admin account"
+      );
     } else {
-      // Fallback to root folder
-      if (userEmail) {
-        uploadPath = `/users/${userEmail}/drive/root:/${fileName}:/content`;
-      } else {
-        uploadPath = `/me/drive/root:/${fileName}:/content`;
-      }
-      logger.warn(
-        "ONEDRIVE_TEMPLATE_FOLDER_ID not set, uploading to root folder"
+      throw new Error(
+        "ONEDRIVE_USER_EMAIL (admin email) must be configured for shared folder access"
       );
     }
 
@@ -119,9 +137,10 @@ export async function uploadOneDriveFile(fileBuffer, fileName, accessToken) {
         error: error.message,
         fileName,
         folderId: process.env.ONEDRIVE_TEMPLATE_FOLDER_ID,
-        userEmail: process.env.ONEDRIVE_USER_EMAIL,
+        adminEmail: process.env.ONEDRIVE_USER_EMAIL,
+        sharePointSiteId: process.env.SHAREPOINT_SITE_ID,
       },
-      "Failed to upload OneDrive file"
+      "Failed to upload file to shared folder"
     );
     throw error;
   }
