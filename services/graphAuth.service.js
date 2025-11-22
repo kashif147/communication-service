@@ -25,12 +25,13 @@ export async function getGraphAccessToken() {
       grant_type: "client_credentials",
     });
 
-    logger.debug(
+    logger.info(
       {
         authority: graphConfig.authority,
         clientId: graphConfig.clientId ? `${graphConfig.clientId.substring(0, 8)}...` : "missing",
         tenantId: graphConfig.tenantId,
         scopes: graphConfig.scopes,
+        hasClientSecret: !!graphConfig.clientSecret,
       },
       "Requesting Microsoft Graph access token"
     );
@@ -40,11 +41,20 @@ export async function getGraphAccessToken() {
     });
 
     if (!response.data || !response.data.access_token) {
+      logger.error(
+        { responseData: response.data },
+        "No access token in response from Microsoft Graph"
+      );
       throw new Error("No access token received from Microsoft Graph");
     }
 
-    logger.debug(
-      { tokenLength: response.data.access_token.length },
+    logger.info(
+      { 
+        tokenLength: response.data.access_token.length,
+        tokenType: response.data.token_type,
+        expiresIn: response.data.expires_in,
+        tokenPrefix: response.data.access_token.substring(0, 20) + "..."
+      },
       "Successfully obtained Microsoft Graph access token"
     );
 

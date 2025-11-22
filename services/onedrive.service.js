@@ -86,7 +86,7 @@ export async function uploadOneDriveFile(fileBuffer, fileName, accessToken) {
     // Use provided token or get a new one
     let token = accessToken;
     if (!token) {
-      logger.debug("No access token provided, obtaining new token");
+      logger.info("No access token provided, obtaining new token from Microsoft Graph");
       token = await getGraphAccessToken();
     }
 
@@ -94,9 +94,13 @@ export async function uploadOneDriveFile(fileBuffer, fileName, accessToken) {
       throw new Error("Failed to obtain Microsoft Graph access token");
     }
 
-    logger.debug(
-      { tokenLength: token.length, tokenPrefix: token.substring(0, 20) + "..." },
-      "Using access token for Graph API"
+    logger.info(
+      { 
+        tokenLength: token.length, 
+        tokenPrefix: token.substring(0, 30) + "...",
+        hasToken: !!token
+      },
+      "Using access token for Graph API upload"
     );
 
     // Create Graph client
