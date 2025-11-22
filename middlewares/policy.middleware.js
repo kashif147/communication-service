@@ -50,9 +50,12 @@ class PolicyMiddleware {
         const queryContext = { ...req.query };
 
         // Remove 'id' from body and query unless it's a route parameter
+        // Also remove from req.body/req.query directly to prevent validation errors downstream
         if (!req.params?.id) {
           delete bodyContext.id;
           delete queryContext.id;
+          delete req.body.id;
+          delete req.query.id;
         }
 
         const context = {

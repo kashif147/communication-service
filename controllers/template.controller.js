@@ -22,8 +22,12 @@ export async function uploadTemplate(req, res, next) {
       return res.fail("No file uploaded. Please upload a .docx file", 400);
     }
 
-    const { name, description, category, id, ...rest } = req.body;
-    // Ignore 'id' field if present in body (not used for upload endpoint)
+    // Remove 'id' from body if present (not used for upload endpoint, causes validation errors)
+    if (req.body.id) {
+      delete req.body.id;
+    }
+
+    const { name, description, category } = req.body;
     const file = req.file;
 
     // Validate file type
