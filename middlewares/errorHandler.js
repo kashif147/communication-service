@@ -51,20 +51,21 @@ export default function errorHandler(err, req, res, next) {
       ? err.message
       : "Internal server error";
 
-  // Log full error details server-side
-  if (!isDevelopment) {
-    logger.error(
-      {
-        error: err.message,
-        stack: err.stack,
-        status,
-        url: req.url,
-        method: req.method,
-      },
-      "Unhandled error"
-    );
-  }
+  // Always log full error details server-side for debugging
+  logger.error(
+    {
+      error: err.message,
+      stack: err.stack,
+      status,
+      url: req.url,
+      method: req.method,
+      body: req.body,
+      query: req.query,
+      params: req.params,
+    },
+    "Unhandled error"
+  );
 
-  res.serverError(message, isDevelopment ? { originalError: err.message } : {});
+  res.serverError(message, isDevelopment ? { originalError: err.message, stack: err.stack } : {});
 }
 

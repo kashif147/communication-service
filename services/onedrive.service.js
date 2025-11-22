@@ -101,20 +101,26 @@ export async function uploadOneDriveFile(fileBuffer, fileName, accessToken) {
     }
 
     // Build upload path based on configuration
+    // Try multiple path formats to handle different folder ID formats
     let uploadPath;
+    let alternativePath;
     
     if (sharePointSiteId) {
       // SharePoint site path - upload to shared folder on SharePoint site
       uploadPath = `/sites/${sharePointSiteId}/drive/items/${folderId}:/${fileName}:/content`;
+      alternativePath = `/sites/${sharePointSiteId}/drive/root:/${folderId}/${fileName}:/content`;
       logger.debug(
-        { folderId, fileName, sharePointSiteId },
+        { folderId, fileName, sharePointSiteId, uploadPath },
         "Uploading to SharePoint site shared folder"
       );
     } else if (adminEmail) {
       // OneDrive shared folder via admin account
+      // Try path with colon syntax first (for drive item IDs)
       uploadPath = `/users/${adminEmail}/drive/items/${folderId}:/${fileName}:/content`;
+      // Alternative: if folderId is a path, use root with path
+      alternativePath = `/users/${adminEmail}/drive/root:/${folderId}/${fileName}:/content`;
       logger.debug(
-        { folderId, fileName, adminEmail },
+        { folderId, fileName, adminEmail, uploadPath, alternativePath },
         "Uploading to OneDrive shared folder via admin account"
       );
     } else {
@@ -123,7 +129,46 @@ export async function uploadOneDriveFile(fileBuffer, fileName, accessToken) {
       );
     }
 
-    const fileResponse = await client.api(uploadPath).put(fileBuffer);
+    logger.debug({ uploadPath, fileName, folderId }, "Attempting file upload");
+
+    let fileResponse;
+    try {
+      fileResponse = await client.api(uploadPath).put(fileBuffer);
+    } catch (firstError) {
+      // If first path fails and we have an alternative, try it
+      if (alternativePath && (firstError.statusCode === 404 || firstError.statusCode === 400)) {
+        logger.warn(
+          { 
+            originalPath: uploadPath, 
+            alternativePath, 
+            error: firstError.message 
+          },
+          "First upload path failed, trying alternative path"
+        );
+        try {
+          fileResponse = await client.api(alternativePath).put(fileBuffer);
+          logger.info({ alternativePath }, "Upload succeeded with alternative path");
+        } catch (secondError) {
+          logger.error(
+            { 
+              originalPath: uploadPath, 
+              alternativePath, 
+              originalError: firstError.message,
+              alternativeError: secondError.message 
+            },
+            "Both upload paths failed"
+          );
+          throw secondError; // Throw the second error as it's more recent
+        }
+      } else {
+        throw firstError; // Re-throw if no alternative or different error
+      }
+    }
+
+    logger.info(
+      { fileId: fileResponse.id, fileName, webUrl: fileResponse.webUrl },
+      "File uploaded successfully to shared folder"
+    );
 
     return {
       fileId: fileResponse.id,
@@ -132,16 +177,39 @@ export async function uploadOneDriveFile(fileBuffer, fileName, accessToken) {
       size: fileResponse.size,
     };
   } catch (error) {
-    logger.error(
-      {
-        error: error.message,
-        fileName,
-        folderId: process.env.ONEDRIVE_TEMPLATE_FOLDER_ID,
-        adminEmail: process.env.ONEDRIVE_USER_EMAIL,
-        sharePointSiteId: process.env.SHAREPOINT_SITE_ID,
-      },
-      "Failed to upload file to shared folder"
+    // Extract detailed error information from Graph API
+    const errorDetails = {
+      message: error.message,
+      fileName,
+      folderId: process.env.ONEDRIVE_TEMPLATE_FOLDER_ID,
+      adminEmail: process.env.ONEDRIVE_USER_EMAIL,
+      sharePointSiteId: process.env.SHAREPOINT_SITE_ID,
+    };
+
+    // If it's a Graph API error, include response details
+    if (error.statusCode) {
+      errorDetails.statusCode = error.statusCode;
+      errorDetails.statusText = error.statusText;
+      if (error.body) {
+        errorDetails.graphError = error.body;
+      }
+    }
+
+    // If it's an axios error, include response data
+    if (error.response) {
+      errorDetails.statusCode = error.response.status;
+      errorDetails.statusText = error.response.statusText;
+      errorDetails.responseData = error.response.data;
+    }
+
+    logger.error(errorDetails, "Failed to upload file to shared folder");
+
+    // Re-throw with more context
+    const uploadError = new Error(
+      `Failed to upload file to shared folder: ${error.message}`
     );
-    throw error;
+    uploadError.originalError = error;
+    uploadError.details = errorDetails;
+    throw uploadError;
   }
 }
