@@ -1,37 +1,55 @@
 import axios from "axios";
 import qs from "qs";
-import { graphConfig } from "../config/graph.js";
 import logger from "../config/logger.js";
 
-export async function getGraphAccessToken() {
-  try {
-    const url = `${graphConfig.authority}/oauth2/v2.0/token`;
+// In-memory token cache
+let cachedToken = null;
+let tokenExpiry = null;
 
-    // Validate configuration
-    if (!graphConfig.clientId) {
-      throw new Error("GRAPH_CLIENT_ID is not configured");
+/**
+ * Get Microsoft Graph access token using OAuth2 client credentials flow
+ * Uses token caching to avoid unnecessary requests (cached for 50-55 minutes)
+ * 
+ * @returns {Promise<string>} - The access token
+ * @throws {Error} - If token acquisition fails
+ */
+export async function getGraphToken() {
+  try {
+    // Check if we have a valid cached token
+    if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
+      logger.debug("Using cached Graph access token");
+      return cachedToken;
     }
-    if (!graphConfig.clientSecret) {
-      throw new Error("GRAPH_CLIENT_SECRET is not configured");
-    }
-    if (!graphConfig.tenantId) {
+
+    // Validate environment variables
+    const tenantId = process.env.GRAPH_TENANT_ID;
+    const clientId = process.env.GRAPH_CLIENT_ID;
+    const clientSecret = process.env.GRAPH_CLIENT_SECRET;
+
+    if (!tenantId) {
       throw new Error("GRAPH_TENANT_ID is not configured");
     }
+    if (!clientId) {
+      throw new Error("GRAPH_CLIENT_ID is not configured");
+    }
+    if (!clientSecret) {
+      throw new Error("GRAPH_CLIENT_SECRET is not configured");
+    }
+
+    const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
 
     const body = qs.stringify({
-      client_id: graphConfig.clientId,
-      client_secret: graphConfig.clientSecret,
-      scope: graphConfig.scopes.join(" "),
+      client_id: clientId,
+      client_secret: clientSecret,
       grant_type: "client_credentials",
+      scope: "https://graph.microsoft.com/.default",
     });
 
     logger.info(
       {
-        authority: graphConfig.authority,
-        clientId: graphConfig.clientId ? `${graphConfig.clientId.substring(0, 8)}...` : "missing",
-        tenantId: graphConfig.tenantId,
-        scopes: graphConfig.scopes,
-        hasClientSecret: !!graphConfig.clientSecret,
+        tenantId,
+        clientId: `${clientId.substring(0, 8)}...`,
+        hasClientSecret: !!clientSecret,
       },
       "Requesting Microsoft Graph access token"
     );
@@ -48,24 +66,38 @@ export async function getGraphAccessToken() {
       throw new Error("No access token received from Microsoft Graph");
     }
 
+    const accessToken = response.data.access_token;
+    const expiresIn = response.data.expires_in || 3600; // Default to 1 hour if not provided
+
+    // Cache token for 50-55 minutes (3000-3300 seconds)
+    // Use expires_in - 5 minutes if less than 55 minutes, otherwise use 50-55 minutes range
+    const minCacheSeconds = 3000; // 50 minutes
+    const maxCacheSeconds = 3300; // 55 minutes
+    const safeCacheSeconds = Math.min(expiresIn - 300, maxCacheSeconds); // Ensure we refresh before expiry
+    const cacheDurationSeconds = Math.max(minCacheSeconds, safeCacheSeconds); // At least 50 minutes
+    const cacheDuration = cacheDurationSeconds * 1000; // Convert to milliseconds
+    
+    cachedToken = accessToken;
+    tokenExpiry = Date.now() + cacheDuration;
+
     logger.info(
       { 
-        tokenLength: response.data.access_token.length,
+        tokenLength: accessToken.length,
         tokenType: response.data.token_type,
-        expiresIn: response.data.expires_in,
-        tokenPrefix: response.data.access_token.substring(0, 20) + "..."
+        expiresIn,
+        cacheDurationMinutes: Math.floor(cacheDuration / 60000),
+        tokenPrefix: accessToken.substring(0, 20) + "..."
       },
       "Successfully obtained Microsoft Graph access token"
     );
 
-    return response.data.access_token;
+    return accessToken;
   } catch (error) {
     const errorDetails = {
       message: error.message,
-      authority: graphConfig.authority,
-      tenantId: graphConfig.tenantId,
-      clientId: graphConfig.clientId ? `${graphConfig.clientId.substring(0, 8)}...` : "missing",
-      hasClientSecret: !!graphConfig.clientSecret,
+      tenantId: process.env.GRAPH_TENANT_ID,
+      clientId: process.env.GRAPH_CLIENT_ID ? `${process.env.GRAPH_CLIENT_ID.substring(0, 8)}...` : "missing",
+      hasClientSecret: !!process.env.GRAPH_CLIENT_SECRET,
     };
 
     // Extract detailed error from response
@@ -91,3 +123,6 @@ export async function getGraphAccessToken() {
     throw authError;
   }
 }
+
+// Export alias for backward compatibility
+export const getGraphAccessToken = getGraphToken;

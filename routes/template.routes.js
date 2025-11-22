@@ -6,6 +6,7 @@ import {
   updateTemplate,
   deleteTemplate,
   extractPlaceholders,
+  testGraphToken,
 } from "../controllers/template.controller.js";
 import { upload } from "../middlewares/upload.mw.js";
 import { defaultPolicyMiddleware } from "../middlewares/policy.middleware.js";
@@ -42,6 +43,11 @@ router.post(
   "/:id/extract-placeholders",
   defaultPolicyMiddleware.requirePermission("communication", "write"),
   extractPlaceholders
+);
+router.get(
+  "/test-graph-token",
+  defaultPolicyMiddleware.requirePermission("communication", "read"),
+  testGraphToken
 );
 
 export default router;

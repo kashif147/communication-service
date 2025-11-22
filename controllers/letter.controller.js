@@ -40,7 +40,7 @@ export async function generateLetter(req, res, next) {
       return res.notFound("Template not found or access denied", { templateId });
     }
 
-    const templateBuffer = await getOneDriveFile(template.fileId, req.token);
+    const templateBuffer = await getOneDriveFile(template.fileId);
     const memberData = await collectMemberData(memberId);
     const mergedDoc = mergeTemplate(templateBuffer, memberData);
 

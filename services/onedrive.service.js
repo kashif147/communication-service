@@ -1,5 +1,6 @@
 import { getGraphClient } from "../config/graph.js";
-import { getGraphAccessToken } from "./graphAuth.service.js";
+import { getGraphToken } from "./graphAuth.service.js";
+import axios from "axios";
 import logger from "../config/logger.js";
 
 /**
@@ -10,13 +11,12 @@ import logger from "../config/logger.js";
  * not from individual user accounts.
  *
  * @param {string} fileId - The OneDrive/SharePoint file ID
- * @param {string} [accessToken] - Optional access token. If not provided, will fetch one automatically
  * @returns {Buffer} - The binary content of the file
  */
-export async function getOneDriveFile(fileId, accessToken) {
+export async function getOneDriveFile(fileId) {
   try {
-    // Use provided token or get a new one
-    const token = accessToken || (await getGraphAccessToken());
+    // Get Graph access token using client credentials
+    const token = await getGraphToken();
 
     // Create Graph client
     const client = getGraphClient(token);
@@ -76,141 +76,125 @@ export async function getOneDriveFile(fileId, accessToken) {
  * Files are uploaded to a shared folder accessible to all users via admin account,
  * not to individual user accounts.
  *
- * @param {Buffer} fileBuffer - The file buffer to upload
+ * @param {string} folderId - The folder ID or path where the file should be uploaded
  * @param {string} fileName - The name of the file
- * @param {string} [accessToken] - Optional access token. If not provided, will fetch one automatically
+ * @param {Buffer} fileBuffer - The file buffer to upload
+ * @param {string} mimeType - The MIME type of the file
  * @returns {Object} - The uploaded file metadata including fileId
  */
-export async function uploadOneDriveFile(fileBuffer, fileName, accessToken) {
+export async function uploadFileToSharedFolder(folderId, fileName, fileBuffer, mimeType) {
   try {
-    // Use provided token or get a new one
-    let token = accessToken;
-    if (!token) {
-      logger.info("No access token provided, obtaining new token from Microsoft Graph");
-      token = await getGraphAccessToken();
-    }
-
-    if (!token) {
-      throw new Error("Failed to obtain Microsoft Graph access token");
-    }
-
-    logger.info(
-      { 
-        tokenLength: token.length, 
-        tokenPrefix: token.substring(0, 30) + "...",
-        hasToken: !!token
-      },
-      "Using access token for Graph API upload"
-    );
-
-    // Create Graph client
-    const client = getGraphClient(token);
+    // Get Graph access token using client credentials
+    const graphToken = await getGraphToken();
 
     // Get configuration for shared folder access
-    const folderId = process.env.ONEDRIVE_TEMPLATE_FOLDER_ID;
-    const adminEmail = process.env.ONEDRIVE_USER_EMAIL; // Required: admin email with folder access
-    const sharePointSiteId = process.env.SHAREPOINT_SITE_ID; // Optional: for SharePoint sites
+    const driveId = process.env.GRAPH_DRIVE_ID;
+    const adminEmail = process.env.ONEDRIVE_USER_EMAIL;
+    const sharePointSiteId = process.env.SHAREPOINT_SITE_ID;
 
-    if (!folderId) {
-      throw new Error(
-        "ONEDRIVE_TEMPLATE_FOLDER_ID must be configured for shared folder upload"
-      );
-    }
-
-    // Build upload path based on configuration
-    // Try multiple path formats to handle different folder ID formats
-    let uploadPath;
-    let alternativePath;
+    // Build upload URL based on configuration
+    let uploadUrl;
+    let alternativeUrl;
     
     if (sharePointSiteId) {
-      // SharePoint site path - upload to shared folder on SharePoint site
-      uploadPath = `/sites/${sharePointSiteId}/drive/items/${folderId}:/${fileName}:/content`;
-      alternativePath = `/sites/${sharePointSiteId}/drive/root:/${folderId}/${fileName}:/content`;
+      // SharePoint site path
+      uploadUrl = `https://graph.microsoft.com/v1.0/sites/${sharePointSiteId}/drive/items/${folderId}:/${encodeURIComponent(fileName)}:/content`;
+      alternativeUrl = `https://graph.microsoft.com/v1.0/sites/${sharePointSiteId}/drive/root:/${folderId}/${encodeURIComponent(fileName)}:/content`;
       logger.debug(
-        { folderId, fileName, sharePointSiteId, uploadPath },
+        { folderId, fileName, sharePointSiteId, uploadUrl },
         "Uploading to SharePoint site shared folder"
+      );
+    } else if (driveId) {
+      // Use drive ID directly
+      uploadUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${folderId}:/${encodeURIComponent(fileName)}:/content`;
+      alternativeUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${folderId}/${encodeURIComponent(fileName)}:/content`;
+      logger.debug(
+        { folderId, fileName, driveId, uploadUrl },
+        "Uploading to OneDrive using drive ID"
       );
     } else if (adminEmail) {
       // OneDrive shared folder via admin account
-      // Try path with colon syntax first (for drive item IDs)
-      uploadPath = `/users/${adminEmail}/drive/items/${folderId}:/${fileName}:/content`;
-      // Alternative: if folderId is a path, use root with path
-      alternativePath = `/users/${adminEmail}/drive/root:/${folderId}/${fileName}:/content`;
+      uploadUrl = `https://graph.microsoft.com/v1.0/users/${adminEmail}/drive/items/${folderId}:/${encodeURIComponent(fileName)}:/content`;
+      alternativeUrl = `https://graph.microsoft.com/v1.0/users/${adminEmail}/drive/root:/${folderId}/${encodeURIComponent(fileName)}:/content`;
       logger.debug(
-        { folderId, fileName, adminEmail, uploadPath, alternativePath },
+        { folderId, fileName, adminEmail, uploadUrl },
         "Uploading to OneDrive shared folder via admin account"
       );
     } else {
       throw new Error(
-        "ONEDRIVE_USER_EMAIL (admin email) must be configured for shared folder access"
+        "GRAPH_DRIVE_ID, ONEDRIVE_USER_EMAIL, or SHAREPOINT_SITE_ID must be configured for shared folder upload"
       );
     }
 
-    logger.debug({ uploadPath, fileName, folderId }, "Attempting file upload");
+    logger.debug({ uploadUrl, fileName, folderId }, "Attempting file upload");
 
     let fileResponse;
     try {
-      fileResponse = await client.api(uploadPath).put(fileBuffer);
+      fileResponse = await axios.put(uploadUrl, fileBuffer, {
+        headers: {
+          Authorization: `Bearer ${graphToken}`,
+          "Content-Type": mimeType || "application/octet-stream",
+        },
+      });
     } catch (firstError) {
       // If first path fails and we have an alternative, try it
-      if (alternativePath && (firstError.statusCode === 404 || firstError.statusCode === 400)) {
+      if (alternativeUrl && (firstError.response?.status === 404 || firstError.response?.status === 400)) {
         logger.warn(
           { 
-            originalPath: uploadPath, 
-            alternativePath, 
+            originalUrl: uploadUrl, 
+            alternativeUrl, 
             error: firstError.message 
           },
           "First upload path failed, trying alternative path"
         );
         try {
-          fileResponse = await client.api(alternativePath).put(fileBuffer);
-          logger.info({ alternativePath }, "Upload succeeded with alternative path");
+          fileResponse = await axios.put(alternativeUrl, fileBuffer, {
+            headers: {
+              Authorization: `Bearer ${graphToken}`,
+              "Content-Type": mimeType || "application/octet-stream",
+            },
+          });
+          logger.info({ alternativeUrl }, "Upload succeeded with alternative path");
         } catch (secondError) {
           logger.error(
             { 
-              originalPath: uploadPath, 
-              alternativePath, 
+              originalUrl: uploadUrl, 
+              alternativeUrl, 
               originalError: firstError.message,
               alternativeError: secondError.message 
             },
             "Both upload paths failed"
           );
-          throw secondError; // Throw the second error as it's more recent
+          throw secondError;
         }
       } else {
-        throw firstError; // Re-throw if no alternative or different error
+        throw firstError;
       }
     }
 
+    const fileData = fileResponse.data;
+
     logger.info(
-      { fileId: fileResponse.id, fileName, webUrl: fileResponse.webUrl },
+      { fileId: fileData.id, fileName, webUrl: fileData.webUrl },
       "File uploaded successfully to shared folder"
     );
 
     return {
-      fileId: fileResponse.id,
-      name: fileResponse.name,
-      webUrl: fileResponse.webUrl,
-      size: fileResponse.size,
+      fileId: fileData.id,
+      name: fileData.name,
+      webUrl: fileData.webUrl,
+      size: fileData.size,
     };
   } catch (error) {
     // Extract detailed error information from Graph API
     const errorDetails = {
       message: error.message,
       fileName,
-      folderId: process.env.ONEDRIVE_TEMPLATE_FOLDER_ID,
+      folderId,
+      driveId: process.env.GRAPH_DRIVE_ID,
       adminEmail: process.env.ONEDRIVE_USER_EMAIL,
       sharePointSiteId: process.env.SHAREPOINT_SITE_ID,
     };
-
-    // If it's a Graph API error, include response details
-    if (error.statusCode) {
-      errorDetails.statusCode = error.statusCode;
-      errorDetails.statusText = error.statusText;
-      if (error.body) {
-        errorDetails.graphError = error.body;
-      }
-    }
 
     // If it's an axios error, include response data
     if (error.response) {
@@ -230,3 +214,6 @@ export async function uploadOneDriveFile(fileBuffer, fileName, accessToken) {
     throw uploadError;
   }
 }
+
+// Backward compatibility alias
+export const uploadOneDriveFile = uploadFileToSharedFolder;

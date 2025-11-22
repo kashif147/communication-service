@@ -1,7 +1,7 @@
 import Template from "../model/template.model.js";
 import {
   getOneDriveFile,
-  uploadOneDriveFile,
+  uploadFileToSharedFolder,
 } from "../services/onedrive.service.js";
 import PizZip from "pizzip";
 import pkg from "docxtemplater/expressions.js";
@@ -50,11 +50,17 @@ export async function uploadTemplate(req, res, next) {
       ? sanitizeString(category, 100)
       : undefined;
 
-    // Upload to OneDrive
-    const oneDriveFile = await uploadOneDriveFile(
-      file.buffer,
+    // Upload to OneDrive using Graph token (client credentials)
+    const folderId = process.env.SHARED_FOLDER_ID || process.env.ONEDRIVE_TEMPLATE_FOLDER_ID;
+    if (!folderId) {
+      return res.fail("SHARED_FOLDER_ID or ONEDRIVE_TEMPLATE_FOLDER_ID must be configured", 500);
+    }
+
+    const oneDriveFile = await uploadFileToSharedFolder(
+      folderId,
       file.originalname,
-      req.token
+      file.buffer,
+      file.mimetype
     );
 
     // Create template record
@@ -230,7 +236,7 @@ export async function extractPlaceholders(req, res, next) {
       return res.notFound("Template not found", { id });
     }
 
-    const buffer = await getOneDriveFile(template.fileId, req.token);
+    const buffer = await getOneDriveFile(template.fileId);
     const zip = new PizZip(buffer);
     const placeholders = extractExpressions(zip);
 
@@ -240,5 +246,51 @@ export async function extractPlaceholders(req, res, next) {
     res.success({ placeholders }, "Placeholders extracted successfully");
   } catch (error) {
     next(error);
+  }
+}
+
+/**
+ * Test endpoint to verify Microsoft Graph token acquisition
+ * GET /api/templates/test-graph-token
+ */
+export async function testGraphToken(req, res, next) {
+  try {
+    const { getGraphToken } = await import("../services/graphAuth.service.js");
+    const axios = (await import("axios")).default;
+    
+    // Try to get token
+    const token = await getGraphToken();
+    
+    // Test with a simple Graph API call to verify token works
+    try {
+      const orgInfo = await axios.get("https://graph.microsoft.com/v1.0/organization", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+      return res.success({
+        tokenAcquired: true,
+        tokenLength: token.length,
+        tokenPrefix: token.substring(0, 30) + "...",
+        organization: orgInfo.data.value?.[0]?.displayName || "Unknown",
+        tenantId: orgInfo.data.value?.[0]?.id || "Unknown",
+        message: "Token acquired and validated successfully"
+      }, "Graph API token test successful");
+    } catch (graphError) {
+      return res.fail("Token acquired but Graph API call failed", 400, {
+        tokenAcquired: true,
+        tokenLength: token.length,
+        tokenPrefix: token.substring(0, 30) + "...",
+        graphError: graphError.message,
+        graphErrorCode: graphError.response?.status,
+        graphErrorBody: graphError.response?.data
+      });
+    }
+  } catch (error) {
+    return res.fail("Failed to acquire Graph API token", 500, {
+      error: error.message,
+      details: error.details || error.originalError?.message
+    });
   }
 }
