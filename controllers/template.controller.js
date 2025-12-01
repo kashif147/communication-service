@@ -1,4 +1,5 @@
 import Template from "../model/template.model.js";
+import BookmarkField from "../model/bookmarkField.model.js";
 import {
   getOneDriveFile,
   uploadOneDriveFile,
@@ -29,7 +30,8 @@ export async function uploadTemplate(req, res, next) {
       delete req.body.id;
     }
 
-    const { name, description, category, tempolateType } = req.body;
+    const { name, description, category, tempolateType, placeholders } =
+      req.body;
     const file = req.file;
 
     // Validate file type
@@ -57,6 +59,126 @@ export async function uploadTemplate(req, res, next) {
       : undefined;
     const sanitizedTempolateType = sanitizeString(tempolateType, 100);
 
+    // Get bookmark field keys for validation (placeholders should match bookmark keys)
+    const bookmarkFields = await BookmarkField.find({}, { key: 1 });
+    const validBookmarkKeys = bookmarkFields.map((f) => f.key);
+
+    // Process placeholders - accept from body or extract from file
+    // Placeholders should match bookmark field keys
+    let templatePlaceholders = [];
+
+    // If placeholders are provided in request body, use them
+    if (placeholders) {
+      let rawPlaceholders = [];
+
+      if (Array.isArray(placeholders)) {
+        rawPlaceholders = placeholders.filter(
+          (p) => typeof p === "string" && p.trim().length > 0
+        );
+      } else if (typeof placeholders === "string") {
+        // Try to parse as JSON array first
+        try {
+          const parsed = JSON.parse(placeholders);
+          if (Array.isArray(parsed)) {
+            rawPlaceholders = parsed.filter(
+              (p) => typeof p === "string" && p.trim().length > 0
+            );
+          } else {
+            // If not JSON array, treat as comma-separated string
+            rawPlaceholders = placeholders
+              .split(",")
+              .map((p) => p.trim())
+              .filter((p) => p.length > 0);
+          }
+        } catch (parseError) {
+          // If JSON parse fails, treat as comma-separated string
+          rawPlaceholders = placeholders
+            .split(",")
+            .map((p) => p.trim())
+            .filter((p) => p.length > 0);
+        }
+      }
+
+      // Validate placeholders against bookmark field keys
+      const invalidPlaceholders = rawPlaceholders.filter(
+        (p) => !validBookmarkKeys.includes(p)
+      );
+
+      if (invalidPlaceholders.length > 0) {
+        logger.warn(
+          {
+            invalidPlaceholders,
+            validBookmarkKeys: validBookmarkKeys.slice(0, 10),
+            fileName: file.originalname,
+          },
+          "Some placeholders do not match bookmark field keys"
+        );
+      }
+
+      templatePlaceholders = rawPlaceholders;
+    } else {
+      // If no placeholders provided, automatically extract from file during upload
+      try {
+        const zip = new PizZip(file.buffer);
+        const extractedPlaceholders = extractExpressions(zip);
+
+        // extractExpressions returns an array of placeholder names (without curly braces)
+        // e.g., {{forname}} becomes "forname"
+        templatePlaceholders = Array.isArray(extractedPlaceholders)
+          ? extractedPlaceholders.filter(
+              (p) => p && typeof p === "string" && p.trim().length > 0
+            )
+          : [];
+
+        if (templatePlaceholders.length > 0) {
+          // Validate placeholders against bookmark field keys
+          const invalidPlaceholders = templatePlaceholders.filter(
+            (p) => !validBookmarkKeys.includes(p)
+          );
+
+          if (invalidPlaceholders.length > 0) {
+            logger.warn(
+              {
+                invalidPlaceholders,
+                validBookmarkKeys: validBookmarkKeys.slice(0, 10), // Log first 10 for reference
+                fileName: file.originalname,
+              },
+              "Some placeholders do not match bookmark field keys"
+            );
+          }
+
+          logger.info(
+            {
+              placeholderCount: templatePlaceholders.length,
+              placeholders: templatePlaceholders,
+              invalidPlaceholders:
+                invalidPlaceholders.length > 0
+                  ? invalidPlaceholders
+                  : undefined,
+              fileName: file.originalname,
+            },
+            "Placeholders automatically extracted from file during upload"
+          );
+        } else {
+          logger.warn(
+            { fileName: file.originalname },
+            "No placeholders found in file during upload. Ensure placeholders are in {{placeholder}} format and match bookmark field keys."
+          );
+        }
+      } catch (extractError) {
+        // If extraction fails, log but don't fail the upload
+        logger.error(
+          {
+            error: extractError.message,
+            stack: extractError.stack,
+            fileName: file.originalname,
+          },
+          "Failed to extract placeholders from file during upload"
+        );
+        templatePlaceholders = [];
+      }
+    }
+
     // Upload to OneDrive
     const folderId = process.env.ONEDRIVE_TEMPLATE_FOLDER_ID || "root";
     const oneDriveFile = await uploadOneDriveFile(
@@ -73,7 +195,7 @@ export async function uploadTemplate(req, res, next) {
       category: sanitizedCategory,
       tempolateType: sanitizedTempolateType,
       fileId: oneDriveFile.fileId,
-      placeholders: [], // Initialize as empty array
+      placeholders: templatePlaceholders,
       createdBy: req.userId, // From token
       tenantId: req.tenantId, // From token
     });
@@ -140,7 +262,8 @@ export async function getTemplate(req, res, next) {
       const fileBuffer = await getOneDriveFile(template.fileId);
       const fileBase64 = fileBuffer.toString("base64");
       responseData.fileContent = fileBase64;
-      responseData.fileContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      responseData.fileContentType =
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     } catch (fileError) {
       // Log error but don't fail the request - template metadata is still returned
       logger.error(
@@ -300,11 +423,9 @@ export async function testGraphToken(req, res, next) {
         "Graph token test successful"
       );
     } catch (tokenError) {
-      res.fail(
-        `Failed to get Graph token: ${tokenError.message}`,
-        500,
-        { error: tokenError.message }
-      );
+      res.fail(`Failed to get Graph token: ${tokenError.message}`, 500, {
+        error: tokenError.message,
+      });
     }
   } catch (error) {
     next(error);
