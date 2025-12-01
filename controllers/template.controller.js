@@ -5,8 +5,7 @@ import {
   uploadOneDriveFile,
 } from "../services/onedrive.service.js";
 import PizZip from "pizzip";
-import pkg from "docxtemplater/expressions.js";
-const { extractExpressions } = pkg;
+import Docxtemplater from "docxtemplater";
 import {
   validateObjectId,
   sanitizeString,
@@ -119,16 +118,63 @@ export async function uploadTemplate(req, res, next) {
     } else {
       // If no placeholders provided, automatically extract from file during upload
       try {
+        logger.debug(
+          { fileName: file.originalname, fileSize: file.buffer.length },
+          "Starting placeholder extraction from file"
+        );
+
         const zip = new PizZip(file.buffer);
-        const extractedPlaceholders = extractExpressions(zip);
+
+        // Extract placeholders by parsing document XML
+        // Get the main document XML from the zip
+        const documentXml = zip.files["word/document.xml"];
+        if (!documentXml) {
+          throw new Error("Invalid .docx file: word/document.xml not found");
+        }
+
+        const xmlContent = documentXml.asText();
+
+        // Extract all {{placeholder}} patterns from the XML
+        const placeholderRegex = /\{\{([^}]+)\}\}/g;
+        const matches = xmlContent.match(placeholderRegex) || [];
+        const extractedPlaceholders = [
+          ...new Set(
+            matches
+              .map((match) => match.replace(/\{\{|\}\}/g, "").trim())
+              .filter((p) => p.length > 0)
+          ),
+        ];
+
+        logger.debug(
+          {
+            extractedRaw: extractedPlaceholders,
+            extractedType: typeof extractedPlaceholders,
+            isArray: Array.isArray(extractedPlaceholders),
+          },
+          "Raw extraction result from extractExpressions"
+        );
 
         // extractExpressions returns an array of placeholder names (without curly braces)
         // e.g., {{forname}} becomes "forname"
-        templatePlaceholders = Array.isArray(extractedPlaceholders)
-          ? extractedPlaceholders.filter(
-              (p) => p && typeof p === "string" && p.trim().length > 0
-            )
-          : [];
+        if (Array.isArray(extractedPlaceholders)) {
+          templatePlaceholders = extractedPlaceholders.filter(
+            (p) => p && typeof p === "string" && p.trim().length > 0
+          );
+        } else if (
+          extractedPlaceholders &&
+          typeof extractedPlaceholders === "object"
+        ) {
+          // Handle case where it might return an object with expressions
+          const expressions =
+            extractedPlaceholders.expressions || extractedPlaceholders;
+          templatePlaceholders = Array.isArray(expressions)
+            ? expressions.filter(
+                (p) => p && typeof p === "string" && p.trim().length > 0
+              )
+            : [];
+        } else {
+          templatePlaceholders = [];
+        }
 
         if (templatePlaceholders.length > 0) {
           // Validate placeholders against bookmark field keys
@@ -179,6 +225,16 @@ export async function uploadTemplate(req, res, next) {
       }
     }
 
+    // Log final placeholders before saving
+    logger.info(
+      {
+        placeholderCount: templatePlaceholders.length,
+        placeholders: templatePlaceholders,
+        fileName: file.originalname,
+      },
+      "Final placeholders to be saved with template"
+    );
+
     // Upload to OneDrive
     const folderId = process.env.ONEDRIVE_TEMPLATE_FOLDER_ID || "root";
     const oneDriveFile = await uploadOneDriveFile(
@@ -195,10 +251,20 @@ export async function uploadTemplate(req, res, next) {
       category: sanitizedCategory,
       tempolateType: sanitizedTempolateType,
       fileId: oneDriveFile.fileId,
-      placeholders: templatePlaceholders,
+      placeholders: templatePlaceholders, // Ensure this is saved
       createdBy: req.userId, // From token
       tenantId: req.tenantId, // From token
     });
+
+    // Verify placeholders were saved
+    logger.info(
+      {
+        templateId: template._id,
+        savedPlaceholders: template.placeholders,
+        placeholderCount: template.placeholders?.length || 0,
+      },
+      "Template created with placeholders"
+    );
 
     res.created({ template }, "Template uploaded successfully");
   } catch (error) {
@@ -394,10 +460,56 @@ export async function extractPlaceholders(req, res, next) {
 
     const buffer = await getOneDriveFile(template.fileId);
     const zip = new PizZip(buffer);
-    const placeholders = extractExpressions(zip);
+
+    // Extract placeholders by parsing document XML
+    const documentXml = zip.files["word/document.xml"];
+    if (!documentXml) {
+      throw new Error("Invalid .docx file: word/document.xml not found");
+    }
+
+    const xmlContent = documentXml.asText();
+
+    // Extract all {{placeholder}} patterns from the XML
+    const placeholderRegex = /\{\{([^}]+)\}\}/g;
+    const matches = xmlContent.match(placeholderRegex) || [];
+    const extractedPlaceholders = [
+      ...new Set(
+        matches
+          .map((match) => match.replace(/\{\{|\}\}/g, "").trim())
+          .filter((p) => p.length > 0)
+      ),
+    ];
+
+    // Ensure placeholders is an array and filter valid strings
+    let placeholders = [];
+    if (Array.isArray(extractedPlaceholders)) {
+      placeholders = extractedPlaceholders.filter(
+        (p) => p && typeof p === "string" && p.trim().length > 0
+      );
+    } else if (
+      extractedPlaceholders &&
+      typeof extractedPlaceholders === "object"
+    ) {
+      const expressions =
+        extractedPlaceholders.expressions || extractedPlaceholders;
+      placeholders = Array.isArray(expressions)
+        ? expressions.filter(
+            (p) => p && typeof p === "string" && p.trim().length > 0
+          )
+        : [];
+    }
 
     template.placeholders = placeholders;
     await template.save();
+
+    logger.info(
+      {
+        templateId: template._id,
+        placeholderCount: placeholders.length,
+        placeholders: placeholders,
+      },
+      "Placeholders extracted and saved to template"
+    );
 
     res.success({ placeholders }, "Placeholders extracted successfully");
   } catch (error) {
