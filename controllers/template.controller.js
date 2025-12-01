@@ -10,6 +10,7 @@ import {
   validateObjectId,
   sanitizeString,
 } from "../middlewares/validateInput.js";
+import logger from "../config/logger.js";
 
 export async function uploadTemplate(req, res, next) {
   try {
@@ -56,10 +57,12 @@ export async function uploadTemplate(req, res, next) {
     const sanitizedTempolateType = sanitizeString(tempolateType, 100);
 
     // Upload to OneDrive
+    const folderId = process.env.ONEDRIVE_TEMPLATE_FOLDER_ID || "root";
     const oneDriveFile = await uploadOneDriveFile(
-      file.buffer,
+      folderId,
       file.originalname,
-      req.token
+      file.buffer,
+      file.mimetype
     );
 
     // Create template record
@@ -129,7 +132,24 @@ export async function getTemplate(req, res, next) {
       return res.notFound("Template not found", { id });
     }
 
-    res.success({ template }, "Template retrieved successfully");
+    const responseData = { template };
+
+    // Always fetch and include file content as base64
+    try {
+      const fileBuffer = await getOneDriveFile(template.fileId);
+      const fileBase64 = fileBuffer.toString("base64");
+      responseData.fileContent = fileBase64;
+      responseData.fileContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    } catch (fileError) {
+      // Log error but don't fail the request - template metadata is still returned
+      logger.error(
+        { error: fileError.message, fileId: template.fileId },
+        "Failed to fetch file content for template"
+      );
+      responseData.fileContentError = "Failed to fetch file content";
+    }
+
+    res.success(responseData, "Template retrieved successfully");
   } catch (error) {
     next(error);
   }
@@ -248,7 +268,7 @@ export async function extractPlaceholders(req, res, next) {
       return res.notFound("Template not found", { id });
     }
 
-    const buffer = await getOneDriveFile(template.fileId, req.token);
+    const buffer = await getOneDriveFile(template.fileId);
     const zip = new PizZip(buffer);
     const placeholders = extractExpressions(zip);
 
