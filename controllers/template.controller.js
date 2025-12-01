@@ -11,6 +11,7 @@ import {
   sanitizeString,
 } from "../middlewares/validateInput.js";
 import logger from "../config/logger.js";
+import { getGraphToken } from "../services/graphAuth.service.js";
 
 export async function uploadTemplate(req, res, next) {
   try {
@@ -276,6 +277,35 @@ export async function extractPlaceholders(req, res, next) {
     await template.save();
 
     res.success({ placeholders }, "Placeholders extracted successfully");
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function testGraphToken(req, res, next) {
+  try {
+    // Validate userId and tenantId are available from token
+    if (!req.userId || !req.tenantId) {
+      return res.fail("User authentication required", 401);
+    }
+
+    try {
+      const token = await getGraphToken();
+      res.success(
+        {
+          tokenExists: !!token,
+          tokenLength: token?.length || 0,
+          tokenPrefix: token ? `${token.substring(0, 20)}...` : null,
+        },
+        "Graph token test successful"
+      );
+    } catch (tokenError) {
+      res.fail(
+        `Failed to get Graph token: ${tokenError.message}`,
+        500,
+        { error: tokenError.message }
+      );
+    }
   } catch (error) {
     next(error);
   }
