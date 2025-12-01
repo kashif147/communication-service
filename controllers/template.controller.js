@@ -1,7 +1,7 @@
 import Template from "../model/template.model.js";
 import {
   getOneDriveFile,
-  uploadFileToSharedFolder,
+  uploadOneDriveFile,
 } from "../services/onedrive.service.js";
 import PizZip from "pizzip";
 import pkg from "docxtemplater/expressions.js";
@@ -27,7 +27,7 @@ export async function uploadTemplate(req, res, next) {
       delete req.body.id;
     }
 
-    const { name, description, category } = req.body;
+    const { name, description, category, tempolateType } = req.body;
     const file = req.file;
 
     // Validate file type
@@ -42,6 +42,10 @@ export async function uploadTemplate(req, res, next) {
       return res.fail("name is required", 400);
     }
 
+    if (!tempolateType) {
+      return res.fail("tempolateType is required", 400);
+    }
+
     const sanitizedName = sanitizeString(name, 200);
     const sanitizedDescription = description
       ? sanitizeString(description, 500)
@@ -49,18 +53,13 @@ export async function uploadTemplate(req, res, next) {
     const sanitizedCategory = category
       ? sanitizeString(category, 100)
       : undefined;
+    const sanitizedTempolateType = sanitizeString(tempolateType, 100);
 
-    // Upload to OneDrive using Graph token (client credentials)
-    const folderId = process.env.SHARED_FOLDER_ID || process.env.ONEDRIVE_TEMPLATE_FOLDER_ID;
-    if (!folderId) {
-      return res.fail("SHARED_FOLDER_ID or ONEDRIVE_TEMPLATE_FOLDER_ID must be configured", 500);
-    }
-
-    const oneDriveFile = await uploadFileToSharedFolder(
-      folderId,
-      file.originalname,
+    // Upload to OneDrive
+    const oneDriveFile = await uploadOneDriveFile(
       file.buffer,
-      file.mimetype
+      file.originalname,
+      req.token
     );
 
     // Create template record
@@ -68,7 +67,9 @@ export async function uploadTemplate(req, res, next) {
       name: sanitizedName,
       description: sanitizedDescription,
       category: sanitizedCategory,
+      tempolateType: sanitizedTempolateType,
       fileId: oneDriveFile.fileId,
+      placeholders: [], // Initialize as empty array
       createdBy: req.userId, // From token
       tenantId: req.tenantId, // From token
     });
@@ -86,13 +87,17 @@ export async function getTemplates(req, res, next) {
       return res.fail("User authentication required", 401);
     }
 
-    const { category } = req.query;
+    const { category, tempolateType } = req.query;
     const filter = {
       tenantId: req.tenantId, // Always filter by tenant from token
     };
 
     if (category) {
       filter.category = sanitizeString(category, 100);
+    }
+
+    if (tempolateType) {
+      filter.tempolateType = sanitizeString(tempolateType, 100);
     }
 
     const templates = await Template.find(filter).sort({ createdAt: -1 });
@@ -138,7 +143,7 @@ export async function updateTemplate(req, res, next) {
     }
 
     const { id } = req.params;
-    const { name, description, category } = req.body;
+    const { name, description, category, tempolateType } = req.body;
 
     validateObjectId(id, "id");
 
@@ -167,6 +172,13 @@ export async function updateTemplate(req, res, next) {
     }
     if (category !== undefined) {
       updateData.category = category ? sanitizeString(category, 100) : null;
+    }
+    if (tempolateType !== undefined) {
+      const sanitizedTempolateType = sanitizeString(tempolateType, 100);
+      if (!sanitizedTempolateType) {
+        return res.fail("Invalid input: tempolateType cannot be empty", 400);
+      }
+      updateData.tempolateType = sanitizedTempolateType;
     }
 
     const updatedTemplate = await Template.findOneAndUpdate(
@@ -236,7 +248,7 @@ export async function extractPlaceholders(req, res, next) {
       return res.notFound("Template not found", { id });
     }
 
-    const buffer = await getOneDriveFile(template.fileId);
+    const buffer = await getOneDriveFile(template.fileId, req.token);
     const zip = new PizZip(buffer);
     const placeholders = extractExpressions(zip);
 
@@ -246,51 +258,5 @@ export async function extractPlaceholders(req, res, next) {
     res.success({ placeholders }, "Placeholders extracted successfully");
   } catch (error) {
     next(error);
-  }
-}
-
-/**
- * Test endpoint to verify Microsoft Graph token acquisition
- * GET /api/templates/test-graph-token
- */
-export async function testGraphToken(req, res, next) {
-  try {
-    const { getGraphToken } = await import("../services/graphAuth.service.js");
-    const axios = (await import("axios")).default;
-    
-    // Try to get token
-    const token = await getGraphToken();
-    
-    // Test with a simple Graph API call to verify token works
-    try {
-      const orgInfo = await axios.get("https://graph.microsoft.com/v1.0/organization", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      
-      return res.success({
-        tokenAcquired: true,
-        tokenLength: token.length,
-        tokenPrefix: token.substring(0, 30) + "...",
-        organization: orgInfo.data.value?.[0]?.displayName || "Unknown",
-        tenantId: orgInfo.data.value?.[0]?.id || "Unknown",
-        message: "Token acquired and validated successfully"
-      }, "Graph API token test successful");
-    } catch (graphError) {
-      return res.fail("Token acquired but Graph API call failed", 400, {
-        tokenAcquired: true,
-        tokenLength: token.length,
-        tokenPrefix: token.substring(0, 30) + "...",
-        graphError: graphError.message,
-        graphErrorCode: graphError.response?.status,
-        graphErrorBody: graphError.response?.data
-      });
-    }
-  } catch (error) {
-    return res.fail("Failed to acquire Graph API token", 500, {
-      error: error.message,
-      details: error.details || error.originalError?.message
-    });
   }
 }

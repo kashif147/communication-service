@@ -229,6 +229,12 @@
                   "value": "letters",
                   "type": "text",
                   "description": "Template category (optional, max 100 chars)"
+                },
+                {
+                  "key": "tempolateType",
+                  "value": "letter",
+                  "type": "text",
+                  "description": "Template type (required, max 100 chars)"
                 }
               ]
             },
@@ -237,7 +243,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "templates", "upload"]
             },
-            "description": "Upload a .docx template file to OneDrive/SharePoint and create a template record. Requires 'communication:create' permission.\n\n**Required Fields:**\n- `file`: .docx file (max 50MB)\n- `name`: Template name (max 200 chars)\n\n**Optional Fields:**\n- `description`: Template description (max 500 chars)\n- `category`: Template category (max 100 chars)\n\n**File Storage:**\n- Files are uploaded to OneDrive/SharePoint folder configured via `ONEDRIVE_TEMPLATE_FOLDER_ID` environment variable\n- If folder ID is not configured, files are uploaded to the authenticated user's OneDrive root folder\n- The OneDrive file ID is stored in the template record\n\n**Important Notes:** \n- userId and tenantId are automatically extracted from the JWT token\n- Template is automatically associated with your tenant\n- Microsoft Graph API must be configured with proper permissions (Files.ReadWrite.All)\n- See GRAPH_API_SETUP.md for Graph API configuration details\n- Do NOT include an `id` field in the request body (it will be automatically filtered out)\n- The `id` field in form data is ignored to prevent ObjectId validation errors"
+            "description": "Upload a .docx template file to OneDrive/SharePoint and create a template record. Requires 'communication:create' permission.\n\n**Required Fields:**\n- `file`: .docx file (max 50MB)\n- `name`: Template name (max 200 chars)\n- `tempolateType`: Template type (max 100 chars)\n\n**Optional Fields:**\n- `description`: Template description (max 500 chars)\n- `category`: Template category (max 100 chars)\n\n**File Storage:**\n- Files are uploaded to OneDrive/SharePoint folder configured via `ONEDRIVE_TEMPLATE_FOLDER_ID` environment variable\n- If folder ID is not configured, files are uploaded to the authenticated user's OneDrive root folder\n- The OneDrive file ID is stored in the template record\n\n**Important Notes:** \n- userId and tenantId are automatically extracted from the JWT token\n- Template is automatically associated with your tenant\n- Microsoft Graph API must be configured with proper permissions (Files.ReadWrite.All)\n- See GRAPH_API_SETUP.md for Graph API configuration details\n- Do NOT include an `id` field in the request body (it will be automatically filtered out)\n- The `id` field in form data is ignored to prevent ObjectId validation errors"
           },
           "response": []
         },
@@ -254,7 +260,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/templates?category=letters",
+              "raw": "{{baseUrl}}/api/templates?category=letters&tempolateType=letter",
               "host": ["{{baseUrl}}"],
               "path": ["api", "templates"],
               "query": [
@@ -262,10 +268,15 @@
                   "key": "category",
                   "value": "letters",
                   "description": "Filter by category (optional). Templates are automatically filtered by your tenantId from token."
+                },
+                {
+                  "key": "tempolateType",
+                  "value": "letter",
+                  "description": "Filter by template type (optional). Templates are automatically filtered by your tenantId from token."
                 }
               ]
             },
-            "description": "Get all templates for your tenant. Requires 'communication:read' permission.\n\n**Query Parameters (optional):**\n- `category`: Filter by category\n\n**Note:** \n- Templates are automatically filtered by tenantId from your JWT token\n- You can only see templates from your own tenant"
+            "description": "Get all templates for your tenant. Requires 'communication:read' permission.\n\n**Query Parameters (optional):**\n- `category`: Filter by category\n- `tempolateType`: Filter by template type\n\n**Note:** \n- Templates are automatically filtered by tenantId from your JWT token\n- You can only see templates from your own tenant"
           },
           "response": []
         },
@@ -309,7 +320,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Updated Template Name\",\n  \"description\": \"Updated description for the template\",\n  \"category\": \"updated-category\"\n}",
+              "raw": "{\n  \"name\": \"Updated Template Name\",\n  \"description\": \"Updated description for the template\",\n  \"category\": \"updated-category\",\n  \"tempolateType\": \"updated-type\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -321,7 +332,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "templates", "{{templateId}}"]
             },
-            "description": "Update template metadata. Requires 'communication:write' permission.\n\n**All fields are optional** - only include fields you want to update:\n- `name`: Template name (max 200 chars)\n- `description`: Template description (max 500 chars)\n- `category`: Template category (max 100 chars)\n\n**Note:** \n- Template must belong to your tenant (tenantId from token)\n- Returns 404 if template not found or belongs to different tenant\n- OneDrive file is NOT updated, only the template metadata"
+            "description": "Update template metadata. Requires 'communication:write' permission.\n\n**All fields are optional** - only include fields you want to update:\n- `name`: Template name (max 200 chars)\n- `description`: Template description (max 500 chars)\n- `category`: Template category (max 100 chars)\n- `tempolateType`: Template type (max 100 chars)\n\n**Note:** \n- Template must belong to your tenant (tenantId from token)\n- Returns 404 if template not found or belongs to different tenant\n- OneDrive file is NOT updated, only the template metadata"
           },
           "response": []
         },
