@@ -32,6 +32,7 @@ router.get(
 router.put(
   "/:id",
   defaultPolicyMiddleware.requirePermission("communication", "write"),
+  upload.single("file"),
   updateTemplate
 );
 router.delete(

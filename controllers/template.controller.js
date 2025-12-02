@@ -3,6 +3,7 @@ import BookmarkField from "../model/bookmarkField.model.js";
 import {
   getOneDriveFile,
   uploadOneDriveFile,
+  updateOneDriveFile,
 } from "../services/onedrive.service.js";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
@@ -353,7 +354,9 @@ export async function updateTemplate(req, res, next) {
     }
 
     const { id } = req.params;
-    const { name, description, category, tempolateType } = req.body;
+    const { name, description, category, tempolateType, placeholders } =
+      req.body;
+    const file = req.file; // Optional file upload
 
     validateObjectId(id, "id");
 
@@ -368,6 +371,165 @@ export async function updateTemplate(req, res, next) {
     }
 
     const updateData = {};
+
+    // Handle file upload if provided
+    if (file) {
+      // Validate file type
+      if (
+        !file.mimetype.includes("wordprocessingml") &&
+        !file.originalname.endsWith(".docx")
+      ) {
+        return res.fail("Invalid file type. Only .docx files are allowed", 400);
+      }
+
+      // Get bookmark field keys for validation
+      const bookmarkFields = await BookmarkField.find({}, { key: 1 });
+      const validBookmarkKeys = bookmarkFields.map((f) => f.key);
+
+      // Process placeholders - accept from body or extract from file
+      let templatePlaceholders = [];
+
+      // If placeholders are provided in request body, use them
+      if (placeholders) {
+        let rawPlaceholders = [];
+
+        if (Array.isArray(placeholders)) {
+          rawPlaceholders = placeholders.filter(
+            (p) => typeof p === "string" && p.trim().length > 0
+          );
+        } else if (typeof placeholders === "string") {
+          try {
+            const parsed = JSON.parse(placeholders);
+            if (Array.isArray(parsed)) {
+              rawPlaceholders = parsed.filter(
+                (p) => typeof p === "string" && p.trim().length > 0
+              );
+            } else {
+              rawPlaceholders = placeholders
+                .split(",")
+                .map((p) => p.trim())
+                .filter((p) => p.length > 0);
+            }
+          } catch (parseError) {
+            rawPlaceholders = placeholders
+              .split(",")
+              .map((p) => p.trim())
+              .filter((p) => p.length > 0);
+          }
+        }
+
+        // Validate placeholders against bookmark field keys
+        const invalidPlaceholders = rawPlaceholders.filter(
+          (p) => !validBookmarkKeys.includes(p)
+        );
+
+        if (invalidPlaceholders.length > 0) {
+          logger.warn(
+            {
+              invalidPlaceholders,
+              validBookmarkKeys: validBookmarkKeys.slice(0, 10),
+              fileName: file.originalname,
+            },
+            "Some placeholders do not match bookmark field keys"
+          );
+        }
+
+        templatePlaceholders = rawPlaceholders;
+      } else {
+        // Extract placeholders from file
+        try {
+          logger.debug(
+            { fileName: file.originalname, fileSize: file.buffer.length },
+            "Starting placeholder extraction from updated file"
+          );
+
+          const zip = new PizZip(file.buffer);
+          const documentXml = zip.files["word/document.xml"];
+          if (!documentXml) {
+            throw new Error("Invalid .docx file: word/document.xml not found");
+          }
+
+          const xmlContent = documentXml.asText();
+          const placeholderRegex = /\{\{([^}]+)\}\}/g;
+          const matches = xmlContent.match(placeholderRegex) || [];
+          const extractedPlaceholders = [
+            ...new Set(
+              matches
+                .map((match) => match.replace(/\{\{|\}\}/g, "").trim())
+                .filter((p) => p.length > 0)
+            ),
+          ];
+
+          if (Array.isArray(extractedPlaceholders)) {
+            templatePlaceholders = extractedPlaceholders.filter(
+              (p) => p && typeof p === "string" && p.trim().length > 0
+            );
+          }
+
+          if (templatePlaceholders.length > 0) {
+            const invalidPlaceholders = templatePlaceholders.filter(
+              (p) => !validBookmarkKeys.includes(p)
+            );
+
+            if (invalidPlaceholders.length > 0) {
+              logger.warn(
+                {
+                  invalidPlaceholders,
+                  validBookmarkKeys: validBookmarkKeys.slice(0, 10),
+                  fileName: file.originalname,
+                },
+                "Some placeholders do not match bookmark field keys"
+              );
+            }
+
+            logger.info(
+              {
+                placeholderCount: templatePlaceholders.length,
+                placeholders: templatePlaceholders,
+                fileName: file.originalname,
+              },
+              "Placeholders extracted from updated file"
+            );
+          } else {
+            logger.warn(
+              { fileName: file.originalname },
+              "No placeholders found in updated file"
+            );
+          }
+        } catch (extractError) {
+          logger.error(
+            {
+              error: extractError.message,
+              stack: extractError.stack,
+              fileName: file.originalname,
+            },
+            "Failed to extract placeholders from updated file"
+          );
+          templatePlaceholders = [];
+        }
+      }
+
+      // Update existing file in OneDrive (replaces content, keeps same fileId)
+      const oneDriveFile = await updateOneDriveFile(
+        template.fileId,
+        file.buffer,
+        file.mimetype
+      );
+
+      // Update placeholders (fileId stays the same)
+      updateData.placeholders = templatePlaceholders;
+
+      logger.info(
+        {
+          templateId: id,
+          fileId: oneDriveFile.fileId,
+          placeholderCount: templatePlaceholders.length,
+        },
+        "Template file updated in OneDrive (existing file replaced)"
+      );
+    }
+
+    // Update metadata fields
     if (name !== undefined) {
       const sanitizedName = sanitizeString(name, 200);
       if (!sanitizedName) {
@@ -389,6 +551,11 @@ export async function updateTemplate(req, res, next) {
         return res.fail("Invalid input: tempolateType cannot be empty", 400);
       }
       updateData.tempolateType = sanitizedTempolateType;
+    }
+
+    // Only update if there's something to update
+    if (Object.keys(updateData).length === 0) {
+      return res.fail("No fields to update", 400);
     }
 
     const updatedTemplate = await Template.findOneAndUpdate(

@@ -215,5 +215,104 @@ export async function uploadFileToSharedFolder(folderId, fileName, fileBuffer, m
   }
 }
 
+/**
+ * Update/replace an existing file in OneDrive/SharePoint using its fileId
+ * This replaces the file content while keeping the same fileId
+ *
+ * @param {string} fileId - The OneDrive/SharePoint file ID to update
+ * @param {Buffer} fileBuffer - The new file buffer to upload
+ * @param {string} mimeType - The MIME type of the file
+ * @returns {Object} - The updated file metadata including fileId
+ */
+export async function updateOneDriveFile(fileId, fileBuffer, mimeType) {
+  try {
+    // Get Graph access token using client credentials
+    const graphToken = await getGraphToken();
+
+    // Get configuration for shared folder access
+    const driveId = process.env.GRAPH_DRIVE_ID;
+    const adminEmail = process.env.ONEDRIVE_USER_EMAIL;
+    const sharePointSiteId = process.env.SHAREPOINT_SITE_ID;
+
+    // Build update URL based on configuration
+    let updateUrl;
+
+    if (sharePointSiteId) {
+      // SharePoint site path
+      updateUrl = `https://graph.microsoft.com/v1.0/sites/${sharePointSiteId}/drive/items/${fileId}/content`;
+      logger.debug(
+        { fileId, sharePointSiteId },
+        "Updating file in SharePoint site"
+      );
+    } else if (driveId) {
+      // Use drive ID directly
+      updateUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${fileId}/content`;
+      logger.debug(
+        { fileId, driveId },
+        "Updating file in OneDrive using drive ID"
+      );
+    } else if (adminEmail) {
+      // OneDrive shared folder via admin account
+      updateUrl = `https://graph.microsoft.com/v1.0/users/${adminEmail}/drive/items/${fileId}/content`;
+      logger.debug(
+        { fileId, adminEmail },
+        "Updating file in OneDrive shared folder via admin account"
+      );
+    } else {
+      throw new Error(
+        "GRAPH_DRIVE_ID, ONEDRIVE_USER_EMAIL, or SHAREPOINT_SITE_ID must be configured for file update"
+      );
+    }
+
+    logger.debug({ updateUrl, fileId }, "Attempting file update");
+
+    const fileResponse = await axios.put(updateUrl, fileBuffer, {
+      headers: {
+        Authorization: `Bearer ${graphToken}`,
+        "Content-Type": mimeType || "application/octet-stream",
+      },
+    });
+
+    const fileData = fileResponse.data;
+
+    logger.info(
+      { fileId: fileData.id, webUrl: fileData.webUrl },
+      "File updated successfully in OneDrive"
+    );
+
+    return {
+      fileId: fileData.id,
+      name: fileData.name,
+      webUrl: fileData.webUrl,
+      size: fileData.size,
+    };
+  } catch (error) {
+    // Extract detailed error information from Graph API
+    const errorDetails = {
+      message: error.message,
+      fileId,
+      adminEmail: process.env.ONEDRIVE_USER_EMAIL,
+      sharePointSiteId: process.env.SHAREPOINT_SITE_ID,
+    };
+
+    // If it's an axios error, include response data
+    if (error.response) {
+      errorDetails.statusCode = error.response.status;
+      errorDetails.statusText = error.response.statusText;
+      errorDetails.responseData = error.response.data;
+    }
+
+    logger.error(errorDetails, "Failed to update file in OneDrive");
+
+    // Re-throw with more context
+    const updateError = new Error(
+      `Failed to update file in OneDrive: ${error.message}`
+    );
+    updateError.originalError = error;
+    updateError.details = errorDetails;
+    throw updateError;
+  }
+}
+
 // Backward compatibility alias
 export const uploadOneDriveFile = uploadFileToSharedFolder;
