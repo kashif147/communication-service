@@ -94,7 +94,26 @@ class PolicyMiddleware {
         let result;
 
         // Check if auth bypass is enabled
+        // SECURITY: Never allow bypass on authentication endpoints
+        const authEndpoints = ['/login', '/signin', '/signup', '/register', '/auth'];
+        const isAuthEndpoint = authEndpoints.some(endpoint => 
+          req.path.toLowerCase().includes(endpoint.toLowerCase())
+        );
+        
         if (process.env.AUTH_BYPASS_ENABLED === "true") {
+          if (isAuthEndpoint) {
+            logger.error(
+              { resource, action, path: req.path, environment: process.env.NODE_ENV },
+              "SECURITY ERROR: Bypass attempted on authentication endpoint"
+            );
+            return res.status(403).json({
+              success: false,
+              error: "Authentication bypass is not allowed for authentication endpoints",
+              code: "SECURITY_VIOLATION",
+              status: 403,
+            });
+          }
+          
           logger.warn(
             { resource, action, environment: process.env.NODE_ENV },
             "AUTH_BYPASS_ENABLED: Authorization bypassed (token still validated)"
@@ -148,28 +167,39 @@ class PolicyMiddleware {
                 };
               }
             } catch (e) {
-              // If decode fails, use context
-              bypassUser = {
-                id: context.userId || "bypass-user-id",
-                userType: "PORTAL",
-                tenantId: context.tenantId || "default-tenant",
-                roles: [],
-                permissions: [],
-              };
+              // If decode fails, reject - never use hardcoded bypass values
+              logger.error(
+                { error: e.message, resource, action },
+                "SECURITY ERROR: Failed to extract user from token during bypass"
+              );
+              return res.status(403).json({
+                success: false,
+                error: "Invalid token: unable to extract user context",
+                code: "INVALID_TOKEN",
+                status: 403,
+              });
             }
+          }
+
+          // SECURITY: Require valid user from token - never use hardcoded values
+          if (!bypassUser) {
+            logger.error(
+              { resource, action },
+              "SECURITY ERROR: No user context available during bypass"
+            );
+            return res.status(403).json({
+              success: false,
+              error: "Token validation required: unable to extract user context",
+              code: "TOKEN_VALIDATION_REQUIRED",
+              status: 403,
+            });
           }
 
           result = {
             success: true,
             decision: "PERMIT",
             reason: "AUTH_BYPASS_ENABLED",
-            user: bypassUser || {
-              id: context.userId || "bypass-user-id",
-              userType: "PORTAL",
-              tenantId: context.tenantId || "default-tenant",
-              roles: [],
-              permissions: [],
-            },
+            user: bypassUser,
             resource,
             action,
             timestamp: new Date().toISOString(),
