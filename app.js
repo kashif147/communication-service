@@ -82,6 +82,23 @@ async function initializeEventSystem() {
 // Initialize event system on startup
 initializeEventSystem();
 
+// Graceful shutdown
+process.on("SIGTERM", async () => {
+  logger.info("SIGTERM received, shutting down gracefully...");
+  if (eventSystemInitialized) {
+    await shutdownEventSystem();
+  }
+  process.exit(0);
+});
+
+process.on("SIGINT", async () => {
+  logger.info("SIGINT received, shutting down gracefully...");
+  if (eventSystemInitialized) {
+    await shutdownEventSystem();
+  }
+  process.exit(0);
+});
+
 app.use(pinoHttp({ logger }));
 app.use(corsMiddleware);
 // Security headers with Helmet
