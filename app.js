@@ -1,32 +1,47 @@
 // Suppress Application Insights warnings if not configured
 // Azure App Service auto-injects Application Insights, but warnings appear if key is missing
-if (process.env.APPLICATIONINSIGHTS_CONNECTION_STRING && process.env.APPLICATIONINSIGHTS_CONNECTION_STRING.trim() === "") {
+if (
+  process.env.APPLICATIONINSIGHTS_CONNECTION_STRING &&
+  process.env.APPLICATIONINSIGHTS_CONNECTION_STRING.trim() === ""
+) {
   process.env.APPLICATIONINSIGHTS_CONNECTION_STRING = undefined;
 }
-if (!process.env.APPINSIGHTS_INSTRUMENTATIONKEY || process.env.APPINSIGHTS_INSTRUMENTATIONKEY.trim() === "") {
+if (
+  !process.env.APPINSIGHTS_INSTRUMENTATIONKEY ||
+  process.env.APPINSIGHTS_INSTRUMENTATIONKEY.trim() === ""
+) {
   const originalStderrWrite = process.stderr.write.bind(process.stderr);
-  process.stderr.write = function(chunk, encoding, callback) {
+  process.stderr.write = function (chunk, encoding, callback) {
     const message = chunk.toString();
-    if (message.includes("ApplicationInsights") && (message.includes("instrumentation key") || message.includes("iKey"))) {
+    if (
+      message.includes("ApplicationInsights") &&
+      (message.includes("instrumentation key") || message.includes("iKey"))
+    ) {
       return true;
     }
     return originalStderrWrite(chunk, encoding, callback);
   };
-  
+
   const originalConsoleWarn = console.warn;
   const originalConsoleError = console.error;
-  
-  console.warn = function(...args) {
+
+  console.warn = function (...args) {
     const message = args.join(" ");
-    if (message.includes("ApplicationInsights") && (message.includes("instrumentation key") || message.includes("iKey"))) {
+    if (
+      message.includes("ApplicationInsights") &&
+      (message.includes("instrumentation key") || message.includes("iKey"))
+    ) {
       return;
     }
     originalConsoleWarn.apply(console, args);
   };
-  
-  console.error = function(...args) {
+
+  console.error = function (...args) {
     const message = args.join(" ");
-    if (message.includes("ApplicationInsights") && (message.includes("instrumentation key") || message.includes("iKey"))) {
+    if (
+      message.includes("ApplicationInsights") &&
+      (message.includes("instrumentation key") || message.includes("iKey"))
+    ) {
       return;
     }
     originalConsoleError.apply(console, args);
@@ -100,7 +115,7 @@ process.on("SIGINT", async () => {
 });
 
 app.use(pinoHttp({ logger }));
-app.use(corsMiddleware);
+// app.use(corsMiddleware);
 // Security headers with Helmet
 app.use(
   helmet({
@@ -123,7 +138,9 @@ app.use(
 app.use(compression());
 // Body parsing with size limits
 app.use(express.json({ limit: "200mb", strict: true }));
-app.use(express.urlencoded({ extended: true, limit: "200mb", parameterLimit: 100 }));
+app.use(
+  express.urlencoded({ extended: true, limit: "200mb", parameterLimit: 100 })
+);
 
 app.use(requestId);
 app.use(loggerMiddleware);
@@ -161,7 +178,7 @@ app.use("/api/letters", letterRoutes);
 app.use("/api/bookmarks", bookmarkRoutes);
 
 app.use(notFound);
-app.use(corsErrorHandler);
-app.use(errorHandler);
+// app.use(corsErrorHandler);
+// app.use(errorHandler);
 
 export default app;
