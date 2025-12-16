@@ -60,9 +60,9 @@ ehthumbs.db
 Thumbs.db
 
 # Docker
-Dockerfile
-Dockerfile*
-docker-compose*.yml
+# Dockerfile
+# Dockerfile*
+# docker-compose*.yml
 .dockerignore
 
 # Build outputs
