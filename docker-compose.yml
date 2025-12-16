@@ -1,16 +1,13 @@
-version: "3.9"
-
 services:
   communication-service:
-    build: .
     container_name: communication-service
+    build: .
     ports:
       - "4004:4004"
     restart: always
     networks:
-      - shared-net
+      - gateway_app-net
 
 networks:
-  shared-net:
+  gateway_app-net:
     external: true
-    name: gateway_app-net
