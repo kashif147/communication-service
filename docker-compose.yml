@@ -2,6 +2,9 @@ services:
   communication-service:
     container_name: communication-service
     build: .
+    env_file:
+      - /home/deploy/config/.env.common
+      - .env.staging
     ports:
       - "4004:4004"
     restart: always
