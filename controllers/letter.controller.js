@@ -37,7 +37,7 @@ export async function generateLetter(req, res, next) {
     });
 
     if (!template) {
-      return res.notFound("Template not found or access denied", { templateId });
+      return res.notFoundRecord("Template not found or access denied");
     }
 
     const templateBuffer = await getOneDriveFile(template.fileId);

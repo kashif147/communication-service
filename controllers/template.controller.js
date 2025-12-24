@@ -319,7 +319,7 @@ export async function getTemplate(req, res, next) {
     });
 
     if (!template) {
-      return res.notFound("Template not found", { id });
+      return res.notFoundRecord("Template not found");
     }
 
     const responseData = { template };
@@ -367,7 +367,7 @@ export async function updateTemplate(req, res, next) {
     });
 
     if (!template) {
-      return res.notFound("Template not found", { id });
+      return res.notFoundRecord("Template not found");
     }
 
     const updateData = {};
@@ -595,7 +595,7 @@ export async function deleteTemplate(req, res, next) {
     });
 
     if (!template) {
-      return res.notFound("Template not found", { id });
+      return res.notFoundRecord("Template not found");
     }
 
     res.success({}, "Template deleted successfully");
@@ -622,7 +622,7 @@ export async function extractPlaceholders(req, res, next) {
     });
 
     if (!template) {
-      return res.notFound("Template not found", { id });
+      return res.notFoundRecord("Template not found");
     }
 
     const buffer = await getOneDriveFile(template.fileId);

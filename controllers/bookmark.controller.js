@@ -69,7 +69,7 @@ export async function updateBookmarkField(req, res, next) {
 
     const field = await BookmarkField.findById(id);
     if (!field) {
-      return res.notFound("Bookmark field not found", { id });
+      return res.notFoundRecord("Bookmark field not found");
     }
 
     const updateData = {};
@@ -124,7 +124,7 @@ export async function deleteBookmarkField(req, res, next) {
 
     const field = await BookmarkField.findByIdAndDelete(id);
     if (!field) {
-      return res.notFound("Bookmark field not found", { id });
+      return res.notFoundRecord("Bookmark field not found");
     }
 
     res.success({}, "Bookmark field deleted successfully");
