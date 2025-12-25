@@ -14,7 +14,7 @@
     "@azure/storage-blob": "^12.22.0",
     "@membership/policy-middleware": "github:kashif147/policy-middleware#gateway",
     "@microsoft/microsoft-graph-client": "^3.0.7",
-    "@projectShell/rabbitmq-middleware": "github:kashif147/rabbitmq-middleware",
+    "@projectShell/rabbitmq-middleware": "github:kashif147/rabbitmq-middleware#gateway",
     "@xmldom/xmldom": "^0.9.8",
     "amqplib": "^0.10.9",
     "angular-expressions": "^1.1.2",
