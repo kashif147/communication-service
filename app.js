@@ -117,7 +117,14 @@ process.on("SIGINT", async () => {
   process.exit(0);
 });
 
-app.use(pinoHttp({ logger }));
+app.use(
+  pinoHttp({
+    logger,
+    autoLogging: {
+      ignore: (req) => req.path === "/health" || req.path.startsWith("/health/"),
+    },
+  })
+);
 // app.use(corsMiddleware);
 // Security headers with Helmet
 app.use(
