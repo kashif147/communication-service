@@ -99,9 +99,17 @@ export async function sendSesMessage(opts) {
   } = opts;
 
   const from =
-    fromAddress || process.env.SES_FROM_ADDRESS || process.env.SES_FROM;
+    fromAddress ||
+    process.env.SES_FROM_ADDRESS ||
+    process.env.SES_FROM ||
+    process.env.EMAIL_FROM_ADDRESS ||
+    process.env.DEFAULT_FROM_EMAIL ||
+    process.env.MAIL_FROM ||
+    process.env.REACT_APP_EMAIL_FROM_ADDRESS;
   if (!from) {
-    throw new Error("SES_FROM_ADDRESS (or fromAddress) is not configured");
+    throw new Error(
+      "SES from address is not configured. Set SES_FROM_ADDRESS (preferred), SES_FROM, EMAIL_FROM_ADDRESS, or pass fromAddress."
+    );
   }
 
   const emailTags = [];
