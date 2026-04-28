@@ -49,6 +49,7 @@ if (
 }
 
 import express from "express";
+import { handleSesSnsWebhook } from "./controllers/snsWebhook.controller.js";
 import compression from "compression";
 import pinoHttp from "pino-http";
 import helmet from "helmet";
@@ -63,6 +64,7 @@ import errorHandler from "./middlewares/errorHandler.js";
 import templateRoutes from "./routes/template.routes.js";
 import letterRoutes from "./routes/letter.routes.js";
 import bookmarkRoutes from "./routes/bookmark.routes.js";
+import campaignRoutes from "./routes/campaign.routes.js";
 import {
   initEventSystem,
   setupConsumers,
@@ -146,6 +148,13 @@ app.use(
   })
 );
 app.use(compression());
+
+app.post(
+  "/api/webhooks/ses-sns",
+  express.raw({ type: "*/*", limit: "6mb" }),
+  handleSesSnsWebhook
+);
+
 // Body parsing with size limits
 app.use(express.json({ limit: "200mb", strict: true }));
 app.use(
@@ -169,15 +178,18 @@ app.get("/", (req, res) => {
     environment: process.env.NODE_ENV || "development",
     endpoints: {
       health: "/health",
-      templates: "/api/templates",
+      templates: "/api/templates (include tempolateType=Email; POST /api/templates/email for SES HTML)",
+      campaigns: "/api/campaigns",
       letters: "/api/letters",
       bookmarks: "/api/bookmarks",
+      sesWebhook: "/api/webhooks/ses-sns",
     },
     timestamp: new Date().toISOString(),
   });
 });
 
 app.use("/api/templates", templateRoutes);
+app.use("/api/campaigns", campaignRoutes);
 app.use("/api/letters", letterRoutes);
 app.use("/api/bookmarks", bookmarkRoutes);
 

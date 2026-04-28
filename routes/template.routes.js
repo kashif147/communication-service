@@ -7,11 +7,20 @@ import {
   deleteTemplate,
   extractPlaceholders,
   testGraphToken,
+  createEmailTemplateRecord,
 } from "../controllers/template.controller.js";
 import { upload } from "../middlewares/upload.mw.js";
 import { defaultPolicyMiddleware } from "../middlewares/policy.middleware.js";
 
 const router = Router();
+
+function optionalDocxUpload(req, res, next) {
+  const ct = req.headers["content-type"] || "";
+  if (ct.includes("multipart/form-data")) {
+    return upload.single("file")(req, res, next);
+  }
+  return next();
+}
 
 router.post(
   "/upload",
@@ -24,6 +33,11 @@ router.get(
   defaultPolicyMiddleware.requirePermission("communication", "read"),
   getTemplates
 );
+router.post(
+  "/email",
+  defaultPolicyMiddleware.requirePermission("communication", "create"),
+  createEmailTemplateRecord
+);
 router.get(
   "/:id",
   defaultPolicyMiddleware.requirePermission("communication", "read"),
@@ -32,7 +46,7 @@ router.get(
 router.put(
   "/:id",
   defaultPolicyMiddleware.requirePermission("communication", "write"),
-  upload.single("file"),
+  optionalDocxUpload,
   updateTemplate
 );
 router.delete(

@@ -13,6 +13,10 @@ import {
 } from "../middlewares/validateInput.js";
 import logger from "../config/logger.js";
 import { getGraphToken } from "../services/graphAuth.service.js";
+import {
+  isEmailTemplateType,
+  extractPlaceholderKeysFromText,
+} from "../helpers/templateEmail.js";
 
 export async function uploadTemplate(req, res, next) {
   try {
@@ -58,6 +62,13 @@ export async function uploadTemplate(req, res, next) {
       ? sanitizeString(category, 100)
       : undefined;
     const sanitizedTempolateType = sanitizeString(tempolateType, 100);
+
+    if (sanitizedTempolateType.toLowerCase() === "email") {
+      return res.fail(
+        "Email templates must be created with POST /api/templates/email (JSON body), not file upload",
+        400
+      );
+    }
 
     // Get bookmark field keys for validation (placeholders should match bookmark keys)
     const bookmarkFields = await BookmarkField.find({}, { key: 1 });
@@ -324,20 +335,20 @@ export async function getTemplate(req, res, next) {
 
     const responseData = { template };
 
-    // Always fetch and include file content as base64
-    try {
-      const fileBuffer = await getOneDriveFile(template.fileId);
-      const fileBase64 = fileBuffer.toString("base64");
-      responseData.fileContent = fileBase64;
-      responseData.fileContentType =
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-    } catch (fileError) {
-      // Log error but don't fail the request - template metadata is still returned
-      logger.error(
-        { error: fileError.message, fileId: template.fileId },
-        "Failed to fetch file content for template"
-      );
-      responseData.fileContentError = "Failed to fetch file content";
+    if (!isEmailTemplateType(template) && template.fileId) {
+      try {
+        const fileBuffer = await getOneDriveFile(template.fileId);
+        const fileBase64 = fileBuffer.toString("base64");
+        responseData.fileContent = fileBase64;
+        responseData.fileContentType =
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      } catch (fileError) {
+        logger.error(
+          { error: fileError.message, fileId: template.fileId },
+          "Failed to fetch file content for template"
+        );
+        responseData.fileContentError = "Failed to fetch file content";
+      }
     }
 
     res.success(responseData, "Template retrieved successfully");
@@ -354,8 +365,16 @@ export async function updateTemplate(req, res, next) {
     }
 
     const { id } = req.params;
-    const { name, description, category, tempolateType, placeholders } =
-      req.body;
+    const {
+      name,
+      description,
+      category,
+      tempolateType,
+      placeholders,
+      subject,
+      htmlBody,
+      textBody,
+    } = req.body;
     const file = req.file; // Optional file upload
 
     validateObjectId(id, "id");
@@ -371,6 +390,64 @@ export async function updateTemplate(req, res, next) {
     }
 
     const updateData = {};
+
+    if (isEmailTemplateType(template) && !file) {
+      if (name !== undefined) {
+        const sanitizedName = sanitizeString(name, 200);
+        if (!sanitizedName) {
+          return res.fail("Invalid input: name cannot be empty", 400);
+        }
+        updateData.name = sanitizedName;
+      }
+      if (description !== undefined) {
+        updateData.description = description
+          ? sanitizeString(description, 500)
+          : null;
+      }
+      if (category !== undefined) {
+        updateData.category = category ? sanitizeString(category, 100) : null;
+      }
+      if (subject !== undefined) {
+        updateData.subject = subject ? sanitizeString(subject, 500) : null;
+      }
+      if (htmlBody !== undefined) {
+        updateData.htmlBody = typeof htmlBody === "string" ? htmlBody : null;
+      }
+      if (textBody !== undefined) {
+        updateData.textBody =
+          typeof textBody === "string" ? textBody : null;
+      }
+      if (placeholders !== undefined) {
+        updateData.placeholders = Array.isArray(placeholders)
+          ? placeholders.filter((p) => typeof p === "string" && p.trim())
+          : template.placeholders;
+      } else if (
+        subject !== undefined ||
+        htmlBody !== undefined ||
+        textBody !== undefined
+      ) {
+        const baseObj = template.toObject ? template.toObject() : { ...template };
+        const next = { ...baseObj, ...updateData };
+        updateData.placeholders = extractPlaceholderKeysFromText(
+          next.subject,
+          next.htmlBody,
+          next.textBody
+        );
+      }
+      updateData.updatedAt = new Date();
+      if (Object.keys(updateData).length === 0) {
+        return res.fail("No fields to update", 400);
+      }
+      const updatedEmail = await Template.findOneAndUpdate(
+        { _id: id, tenantId: req.tenantId },
+        updateData,
+        { new: true, runValidators: true }
+      );
+      return res.success(
+        { template: updatedEmail },
+        "Template updated successfully"
+      );
+    }
 
     // Handle file upload if provided
     if (file) {
@@ -625,6 +702,17 @@ export async function extractPlaceholders(req, res, next) {
       return res.notFoundRecord("Template not found");
     }
 
+    if (isEmailTemplateType(template)) {
+      const keys = extractPlaceholderKeysFromText(
+        template.subject,
+        template.htmlBody,
+        template.textBody
+      );
+      template.placeholders = keys;
+      await template.save();
+      return res.success({ placeholders: keys }, "Placeholders updated");
+    }
+
     const buffer = await getOneDriveFile(template.fileId);
     const zip = new PizZip(buffer);
 
@@ -679,6 +767,47 @@ export async function extractPlaceholders(req, res, next) {
     );
 
     res.success({ placeholders }, "Placeholders extracted successfully");
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function createEmailTemplateRecord(req, res, next) {
+  try {
+    if (!req.userId || !req.tenantId) {
+      return res.fail("User authentication required", 401);
+    }
+    const {
+      name,
+      description,
+      category,
+      subject,
+      htmlBody,
+      textBody,
+      placeholders,
+    } = req.body;
+    if (!name || !subject || !htmlBody) {
+      return res.fail("name, subject, and htmlBody are required", 400);
+    }
+    const merged =
+      Array.isArray(placeholders) && placeholders.length
+        ? placeholders.filter((p) => typeof p === "string" && p.trim())
+        : extractPlaceholderKeysFromText(subject, htmlBody, textBody);
+
+    const template = await Template.create({
+      name: sanitizeString(name, 200),
+      description: description ? sanitizeString(description, 500) : undefined,
+      category: category ? sanitizeString(category, 100) : undefined,
+      tempolateType: "Email",
+      fileId: null,
+      subject: sanitizeString(subject, 500),
+      htmlBody,
+      textBody: typeof textBody === "string" ? textBody : "",
+      placeholders: merged,
+      createdBy: req.userId,
+      tenantId: req.tenantId,
+    });
+    res.created({ template }, "Email template created");
   } catch (error) {
     next(error);
   }
