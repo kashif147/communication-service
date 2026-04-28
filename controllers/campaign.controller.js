@@ -422,11 +422,19 @@ export async function postDraftPreview(req, res, next) {
     }
 
     const auth = req.headers.authorization || req.headers.Authorization;
-    const profiles = await fetchProfilesBatch({
-      profileIds: [String(profileId)],
-      tenantId: req.tenantId,
-      authorizationHeader: auth,
-    });
+    let profiles;
+    try {
+      profiles = await fetchProfilesBatch({
+        profileIds: [String(profileId)],
+        tenantId: req.tenantId,
+        authorizationHeader: auth,
+      });
+    } catch (e) {
+      return res.fail(
+        `Unable to resolve profile for preview: ${e.message}`,
+        502
+      );
+    }
     const profile = profiles[0];
     if (!profile) return res.fail("Profile not found", 404);
 
@@ -465,11 +473,19 @@ export async function postDraftTestEmail(req, res, next) {
     }
 
     const auth = req.headers.authorization || req.headers.Authorization;
-    const profiles = await fetchProfilesBatch({
-      profileIds: [String(profileId)],
-      tenantId: req.tenantId,
-      authorizationHeader: auth,
-    });
+    let profiles;
+    try {
+      profiles = await fetchProfilesBatch({
+        profileIds: [String(profileId)],
+        tenantId: req.tenantId,
+        authorizationHeader: auth,
+      });
+    } catch (e) {
+      return res.fail(
+        `Unable to resolve profile for test email: ${e.message}`,
+        502
+      );
+    }
     const profile = profiles[0];
     if (!profile) return res.fail("Profile not found", 404);
 
