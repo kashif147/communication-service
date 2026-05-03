@@ -10,7 +10,7 @@ import app from "../app.js";
 let server;
 
 async function start() {
-  const port = Number(process.env.PORT || 4000);
+  const port = Number(process.env.PORT || 4004);
   server = app.listen(port, () => {
     logger.info({ port }, "API listening");
   });
