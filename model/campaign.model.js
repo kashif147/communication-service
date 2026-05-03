@@ -23,6 +23,7 @@ const CampaignSchema = new mongoose.Schema(
     attachments: { type: [AttachmentSchema], default: [] },
     scheduledAt: { type: Date, default: null },
     createdBy: { type: String, default: null },
+    createdByName: { type: String, default: null },
     tenantId: { type: String, required: true, index: true },
     status: {
       type: String,

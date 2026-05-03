@@ -63,6 +63,24 @@ function normalizeAttachments(raw) {
   });
 }
 
+function resolveActorFullName(req) {
+  const combinedGivenFamily =
+    req?.user?.given_name && req?.user?.family_name
+      ? `${req.user.given_name} ${req.user.family_name}`
+      : null;
+  const fromReqUser =
+    req?.user?.fullName ||
+    req?.user?.name ||
+    req?.user?.displayName ||
+    combinedGivenFamily;
+  const fromHeaders =
+    req?.headers?.["x-user-fullname"] ||
+    req?.headers?.["x-user-name"] ||
+    req?.headers?.["x-user-display-name"];
+  const fullName = sanitizeString(String(fromReqUser || fromHeaders || "").trim(), 200);
+  return fullName || null;
+}
+
 export async function createCampaign(req, res, next) {
   try {
     if (!req.userId || !req.tenantId) {
@@ -120,6 +138,7 @@ export async function createCampaign(req, res, next) {
       attachments: att,
       scheduledAt: when && when > now ? when : null,
       createdBy: req.userId,
+      createdByName: resolveActorFullName(req),
       tenantId: req.tenantId,
       fromEmail: fromEmail ? sanitizeString(fromEmail, 320) : null,
       batchSize: batchSize || 14,
@@ -354,7 +373,7 @@ export async function getCampaignRecipients(req, res, next) {
     const { id } = req.params;
     validateObjectId(id, "id");
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 25));
+    const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit, 10) || 500));
     const skip = (page - 1) * limit;
 
     const exists = await Campaign.exists({ _id: id, tenantId: req.tenantId });
