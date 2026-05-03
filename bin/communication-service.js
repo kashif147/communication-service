@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-import dotenvFlow from "dotenv-flow";
-dotenvFlow.config();
+import "dotenv-flow/config";
 import { connectDB, disconnectDB } from "../config/db.js";
 import { shutdownEventSystem } from "../rabbitMQ/index.js";
 import logger from "../config/logger.js";
