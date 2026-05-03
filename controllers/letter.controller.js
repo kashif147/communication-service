@@ -12,6 +12,7 @@ import {
   validateObjectId,
   sanitizeString,
 } from "../middlewares/validateInput.js";
+import bizLogger from "../config/bizLogger.js";
 
 export async function generateLetter(req, res, next) {
   try {
@@ -64,6 +65,14 @@ export async function generateLetter(req, res, next) {
     });
 
     const downloadUrl = generateDownloadUrl(blobPath);
+
+    bizLogger.business("Communication letter generated and stored", {
+      eventType: "LetterGenerated",
+      membershipId: memberId,
+      tenantId: req.tenantId,
+      profileId: null,
+      applicationId: null,
+    }, req);
 
     res.created(
       {

@@ -56,6 +56,12 @@ import helmet from "helmet";
 import { corsMiddleware, corsErrorHandler } from "./config/cors.js";
 import { limiterGeneral } from "./config/rateLimiters.js";
 import logger from "./config/logger.js";
+import bizLogger from "./config/bizLogger.js";
+import {
+  correlationIdMiddleware,
+  logErrorMiddleware,
+  createSystemLogsRouter,
+} from "@projectShell/logging-lib";
 import requestId from "./middlewares/requestId.js";
 import loggerMiddleware from "./middlewares/logger.mw.js";
 import responseMiddleware from "./middlewares/response.mw.js";
@@ -149,6 +155,8 @@ app.use(
 );
 app.use(compression());
 
+app.use(correlationIdMiddleware);
+
 app.post(
   "/api/webhooks/ses-sns",
   express.raw({ type: "*/*", limit: "6mb" }),
@@ -160,6 +168,8 @@ app.use(express.json({ limit: "200mb", strict: true }));
 app.use(
   express.urlencoded({ extended: true, limit: "200mb", parameterLimit: 100 })
 );
+
+app.use("/api", createSystemLogsRouter(bizLogger));
 
 app.use(requestId);
 app.use(loggerMiddleware);
@@ -195,6 +205,7 @@ app.use("/api/bookmarks", bookmarkRoutes);
 
 app.use(notFound);
 // app.use(corsErrorHandler);
-// app.use(errorHandler);
+app.use(logErrorMiddleware(bizLogger));
+app.use(errorHandler);
 
 export default app;
