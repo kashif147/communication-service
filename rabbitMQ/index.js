@@ -14,6 +14,10 @@ import {
   handleCrmUserCreated,
   handleCrmUserUpdated,
 } from "./listeners/user.crm.listener.js";
+import {
+  handleUndergraduateGraduationCommsRequested,
+  ROUTING_KEY as UGRAD_GRADUATION_COMMS_ROUTING_KEY,
+} from "./listeners/undergraduateGraduationComms.listener.js";
 
 // Initialize event system
 export async function initEventSystem() {
@@ -93,6 +97,27 @@ export async function setupConsumers() {
 
     await consumer.consume(USER_QUEUE, { prefetch: 10 });
     logger.info("CRM user events consumer ready", { queue: USER_QUEUE });
+
+    const MEMBERSHIP_QUEUE = "communication-service.membership.events";
+    await consumer.createQueue(MEMBERSHIP_QUEUE, {
+      durable: true,
+      messageTtl: 3600000,
+    });
+
+    await consumer.bindQueue(MEMBERSHIP_QUEUE, "membership.events", [
+      UGRAD_GRADUATION_COMMS_ROUTING_KEY,
+    ]);
+
+    consumer.registerHandler(
+      UGRAD_GRADUATION_COMMS_ROUTING_KEY,
+      handleUndergraduateGraduationCommsRequested
+    );
+
+    await consumer.consume(MEMBERSHIP_QUEUE, { prefetch: 3 });
+    logger.info("Membership events consumer ready", {
+      queue: MEMBERSHIP_QUEUE,
+      routingKeys: [UGRAD_GRADUATION_COMMS_ROUTING_KEY],
+    });
 
     logger.info("All consumers set up successfully");
   } catch (error) {

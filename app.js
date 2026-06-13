@@ -71,6 +71,7 @@ import templateRoutes from "./routes/template.routes.js";
 import letterRoutes from "./routes/letter.routes.js";
 import bookmarkRoutes from "./routes/bookmark.routes.js";
 import campaignRoutes from "./routes/campaign.routes.js";
+import correspondenceRoutes from "./routes/correspondence.routes.js";
 import {
   initEventSystem,
   setupConsumers,
@@ -191,6 +192,7 @@ app.get("/", (req, res) => {
       templates: "/api/templates (include tempolateType=Email; POST /api/templates/email for SES HTML)",
       campaigns: "/api/campaigns",
       letters: "/api/letters",
+      correspondence: "/api/correspondence/profile/:profileId",
       bookmarks: "/api/bookmarks",
       sesWebhook: "/api/webhooks/ses-sns",
     },
@@ -201,6 +203,7 @@ app.get("/", (req, res) => {
 app.use("/api/templates", templateRoutes);
 app.use("/api/campaigns", campaignRoutes);
 app.use("/api/letters", letterRoutes);
+app.use("/api", correspondenceRoutes);
 app.use("/api/bookmarks", bookmarkRoutes);
 
 app.use(notFound);
