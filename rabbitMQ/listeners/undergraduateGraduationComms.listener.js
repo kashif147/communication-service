@@ -1,5 +1,5 @@
-import { processUndergraduateGraduationComms } from "../services/undergraduateGraduationComms.service.js";
-import logger from "../config/logger.js";
+import { processUndergraduateGraduationComms } from "../../services/undergraduateGraduationComms.service.js";
+import logger from "../../config/logger.js";
 
 const ROUTING_KEY = "members.undergraduate.graduation.comms.requested.v1";
 
