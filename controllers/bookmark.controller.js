@@ -36,7 +36,10 @@ export async function createBookmarkField(req, res, next) {
     const sanitizedLabel = sanitizeString(label, 200);
     const sanitizedPath = sanitizeString(path, 500);
     const validDataTypes = ["string", "date", "number"];
-    const sanitizedDataType = validDataTypes.includes(dataType) ? dataType : "string";
+    const normalizedDataType = String(dataType || "").toLowerCase();
+    const sanitizedDataType = validDataTypes.includes(normalizedDataType)
+      ? normalizedDataType
+      : "string";
 
     if (!sanitizedKey || !sanitizedLabel || !sanitizedPath) {
       return res.fail("Invalid input: key, label, and path cannot be empty", 400);
@@ -96,7 +99,10 @@ export async function updateBookmarkField(req, res, next) {
     }
     if (dataType !== undefined) {
       const validDataTypes = ["string", "date", "number"];
-      const sanitizedDataType = validDataTypes.includes(dataType) ? dataType : "string";
+      const normalizedDataType = String(dataType || "").toLowerCase();
+      const sanitizedDataType = validDataTypes.includes(normalizedDataType)
+        ? normalizedDataType
+        : "string";
       updateData.dataType = sanitizedDataType;
     }
 
