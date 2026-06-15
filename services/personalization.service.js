@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { formatBookmarkValueForHtmlReplacement } from "./bookmarkMerge.service.js";
 
 function pickEmail(profile) {
   const c = profile?.contactInfo || {};
@@ -75,7 +76,7 @@ export function applyTemplate(template, map) {
     const re = new RegExp(`\\{\\{\\s*${escapeReg(k)}\\s*\\}\\}`, "gi");
     const val = String(map[k] ?? "");
     subject = subject.replace(re, val);
-    html = html.replace(re, val);
+    html = html.replace(re, formatBookmarkValueForHtmlReplacement(val));
     text = text.replace(re, val);
   }
   return { subject, html, text };

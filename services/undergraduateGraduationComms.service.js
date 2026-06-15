@@ -207,6 +207,7 @@ export async function processUndergraduateGraduationComms(payload) {
   const mergeMap = await buildBookmarkMergeMap({
     profile,
     subscription: subscriptionContext,
+    tenantId,
   });
 
   const templateBuffer = await getOneDriveFile(letterTemplate.fileId);
