@@ -255,8 +255,6 @@ export async function buildBookmarkMergeMap({
 export {
   getByPath,
   formatBookmarkValue,
-  formatMultilineValueForHtml,
-  formatBookmarkValueForHtmlReplacement,
   getSystemBookmarkContext,
   resolveBookmarkRawValue,
   parseBookmarkPath,
