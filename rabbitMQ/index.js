@@ -18,6 +18,10 @@ import {
   handleUndergraduateGraduationCommsRequested,
   ROUTING_KEY as UGRAD_GRADUATION_COMMS_ROUTING_KEY,
 } from "./listeners/undergraduateGraduationComms.listener.js";
+import {
+  handleGapLetterRequested,
+  ROUTING_KEY as GAP_LETTER_ROUTING_KEY,
+} from "./listeners/gapLetterComms.listener.js";
 
 // Initialize event system
 export async function initEventSystem() {
@@ -106,17 +110,19 @@ export async function setupConsumers() {
 
     await consumer.bindQueue(MEMBERSHIP_QUEUE, "membership.events", [
       UGRAD_GRADUATION_COMMS_ROUTING_KEY,
+      GAP_LETTER_ROUTING_KEY,
     ]);
 
     consumer.registerHandler(
       UGRAD_GRADUATION_COMMS_ROUTING_KEY,
       handleUndergraduateGraduationCommsRequested
     );
+    consumer.registerHandler(GAP_LETTER_ROUTING_KEY, handleGapLetterRequested);
 
     await consumer.consume(MEMBERSHIP_QUEUE, { prefetch: 3 });
     logger.info("Membership events consumer ready", {
       queue: MEMBERSHIP_QUEUE,
-      routingKeys: [UGRAD_GRADUATION_COMMS_ROUTING_KEY],
+      routingKeys: [UGRAD_GRADUATION_COMMS_ROUTING_KEY, GAP_LETTER_ROUTING_KEY],
     });
 
     logger.info("All consumers set up successfully");
@@ -149,4 +155,3 @@ export { init, publisher, consumer, shutdown };
 
 // Export event types
 export const EVENT_TYPES = MIDDLEWARE_EVENT_TYPES;
-
