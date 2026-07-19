@@ -22,6 +22,11 @@ import {
   handleGapLetterRequested,
   ROUTING_KEY as GAP_LETTER_ROUTING_KEY,
 } from "./listeners/gapLetterComms.listener.js";
+import {
+  handleEventRegistrationConfirmed,
+  handleEventRegistrationCancelled,
+  ROUTING_KEYS as EVENT_REGISTRATION_ROUTING_KEYS,
+} from "./listeners/eventRegistration.listener.js";
 
 // Initialize event system
 export async function initEventSystem() {
@@ -33,6 +38,7 @@ export async function initEventSystem() {
       prefetch: 10,
       connectionName: "communication-service",
       serviceName: "communication-service",
+      exchanges: [{ name: "events.events", type: "topic", options: { durable: true } }],
     });
     logger.info("Event system initialized with middleware");
   } catch (error) {
@@ -123,6 +129,29 @@ export async function setupConsumers() {
     logger.info("Membership events consumer ready", {
       queue: MEMBERSHIP_QUEUE,
       routingKeys: [UGRAD_GRADUATION_COMMS_ROUTING_KEY, GAP_LETTER_ROUTING_KEY],
+    });
+
+    // Events/courses registration comms (events.events exchange)
+    const EVENTS_QUEUE = "communication-service.events.events";
+    await consumer.createQueue(EVENTS_QUEUE, { durable: true, messageTtl: 3600000 });
+    await consumer.bindQueue(EVENTS_QUEUE, "events.events", [
+      EVENT_REGISTRATION_ROUTING_KEYS.REGISTRATION_CONFIRMED,
+      EVENT_REGISTRATION_ROUTING_KEYS.REGISTRATION_CANCELLED,
+    ]);
+
+    consumer.registerHandler(
+      EVENT_REGISTRATION_ROUTING_KEYS.REGISTRATION_CONFIRMED,
+      async (payload) => handleEventRegistrationConfirmed(payload),
+    );
+    consumer.registerHandler(
+      EVENT_REGISTRATION_ROUTING_KEYS.REGISTRATION_CANCELLED,
+      async (payload) => handleEventRegistrationCancelled(payload),
+    );
+
+    await consumer.consume(EVENTS_QUEUE, { prefetch: 10 });
+    logger.info("Events/courses registration consumer ready", {
+      queue: EVENTS_QUEUE,
+      routingKeys: Object.values(EVENT_REGISTRATION_ROUTING_KEYS),
     });
 
     logger.info("All consumers set up successfully");

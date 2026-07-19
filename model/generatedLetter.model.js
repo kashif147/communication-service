@@ -14,6 +14,7 @@ const GeneratedLetterSchema = new mongoose.Schema({
   sourceKey: { type: String, default: null, index: true },
   displayName: { type: String, default: null },
   subscriptionId: { type: String, default: null },
+  registrationId: { type: String, default: null, index: true }, // events-service Registration._id, for certificates
   createdAt: { type: Date, default: Date.now },
 });
 

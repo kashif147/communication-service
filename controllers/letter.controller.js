@@ -21,7 +21,7 @@ export async function generateLetter(req, res, next) {
       return res.fail("User authentication required", 401);
     }
 
-    const { memberId, templateId } = req.body;
+    const { memberId, templateId, registrationId } = req.body;
 
     if (!memberId || !templateId) {
       return res.fail("memberId and templateId are required", 400);
@@ -62,6 +62,7 @@ export async function generateLetter(req, res, next) {
       contentType: "docx",
       tenantId: req.tenantId, // From token
       createdBy: req.userId, // From token
+      registrationId: registrationId || null,
     });
 
     const downloadUrl = generateDownloadUrl(blobPath);
