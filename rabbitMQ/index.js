@@ -27,6 +27,13 @@ import {
   handleEventRegistrationCancelled,
   ROUTING_KEYS as EVENT_REGISTRATION_ROUTING_KEYS,
 } from "./listeners/eventRegistration.listener.js";
+import {
+  handleIssuesIrReferred,
+  handleIssuesIrOutcomeReceived,
+  handleIssuesDueDateApproaching,
+  handleIssuesIssueCreated,
+  ROUTING_KEYS as ISSUES_ROUTING_KEYS,
+} from "./listeners/issues.listener.js";
 
 // Initialize event system
 export async function initEventSystem() {
@@ -38,7 +45,13 @@ export async function initEventSystem() {
       prefetch: 10,
       connectionName: "communication-service",
       serviceName: "communication-service",
-      exchanges: [{ name: "events.events", type: "topic", options: { durable: true } }],
+      exchanges: [
+        { name: "events.events", type: "topic", options: { durable: true } },
+        // issue-service's own exchange (not one of rabbitmq-middleware's default exchanges)
+        // - asserted here the same way issue-service itself asserts it, since a consumer
+        // binding to an exchange it doesn't own still needs that exchange to exist.
+        { name: "issues.events", type: "topic", options: { durable: true } },
+      ],
     });
     logger.info("Event system initialized with middleware");
   } catch (error) {
@@ -152,6 +165,33 @@ export async function setupConsumers() {
     logger.info("Events/courses registration consumer ready", {
       queue: EVENTS_QUEUE,
       routingKeys: Object.values(EVENT_REGISTRATION_ROUTING_KEYS),
+    });
+
+    // Issue Management email notifications (issues.events exchange, issue-service)
+    const ISSUES_QUEUE = "communication-service.issues.events";
+    await consumer.createQueue(ISSUES_QUEUE, { durable: true, messageTtl: 3600000 });
+    await consumer.bindQueue(ISSUES_QUEUE, "issues.events", [
+      ISSUES_ROUTING_KEYS.IR_REFERRED,
+      ISSUES_ROUTING_KEYS.IR_OUTCOME_RECEIVED,
+      ISSUES_ROUTING_KEYS.DUEDATE_APPROACHING,
+      ISSUES_ROUTING_KEYS.ISSUE_CREATED,
+    ]);
+
+    consumer.registerHandler(ISSUES_ROUTING_KEYS.IR_REFERRED, handleIssuesIrReferred);
+    consumer.registerHandler(
+      ISSUES_ROUTING_KEYS.IR_OUTCOME_RECEIVED,
+      handleIssuesIrOutcomeReceived,
+    );
+    consumer.registerHandler(
+      ISSUES_ROUTING_KEYS.DUEDATE_APPROACHING,
+      handleIssuesDueDateApproaching,
+    );
+    consumer.registerHandler(ISSUES_ROUTING_KEYS.ISSUE_CREATED, handleIssuesIssueCreated);
+
+    await consumer.consume(ISSUES_QUEUE, { prefetch: 10 });
+    logger.info("Issue Management events consumer ready", {
+      queue: ISSUES_QUEUE,
+      routingKeys: Object.values(ISSUES_ROUTING_KEYS),
     });
 
     logger.info("All consumers set up successfully");
