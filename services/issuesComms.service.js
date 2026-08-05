@@ -332,15 +332,17 @@ export async function handleDueDateApproaching(payload) {
 }
 
 /**
- * #4 - issues.issue.created.v1, filtered to issueSource === "MEMBER" (this event fires for
- * every issue creation, not just member-sourced ones - filter lives here, not upstream).
+ * #4 - issues.issue.created.v1, filtered to issueSource === "MEMBER-IS" (this event fires
+ * for every issue creation, not just member-sourced ones - filter lives here, not upstream).
+ * "MEMBER-IS" matches issue-service's Issue Source Lookup code (LookupType "ISSUESRC") -
+ * see issue-service/models/issue.model.js's ISSUE_SOURCES comment.
  * Recipient: the member, resolved via memberIds[0] -> profile-service.
  */
 export async function handleIssueCreated(payload) {
   const data = payload?.data || payload;
   const { tenantId, issueId, issueSource, memberIds } = data || {};
 
-  if (String(issueSource || "").toUpperCase() !== "MEMBER") {
+  if (String(issueSource || "").toUpperCase() !== "MEMBER-IS") {
     return { ok: true, skipped: true, reason: "issueSource_not_member" };
   }
   if (!tenantId || !issueId) {

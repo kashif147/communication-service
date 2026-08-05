@@ -74,7 +74,7 @@ const TEMPLATES = [
   {
     name: ISSUE_MEMBER_ACK_EMAIL_TEMPLATE_NAME,
     description:
-      "Sent to the member when an issue is logged with issueSource === \"MEMBER\".",
+      "Sent to the member when an issue is logged with issueSource === \"MEMBER-IS\".",
     subject: DEFAULT_ISSUE_MEMBER_ACK_SUBJECT,
     htmlBody: DEFAULT_ISSUE_MEMBER_ACK_HTML,
     textBody: DEFAULT_ISSUE_MEMBER_ACK_TEXT,
