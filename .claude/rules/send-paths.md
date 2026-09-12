@@ -6,6 +6,20 @@
    validates outbound URLs against an allowlist to block SSRF), merges into the OneDrive `.docx`
    template (`services/mailMerge.service.js`, docxtemplater/pizzip), uploads the result to Azure
    Blob (`services/azureBlob.service.js`), returns a time-limited SAS download URL.
+   `POST /api/letters/internal/generate` (`generateLetterInternal`) is the system-triggered twin
+   for callers with no originating user (events-service's certificate auto-issuance) — see
+   `auth.md`. It optionally also emails the generated PDF as an attachment via `sendSesMessage`
+   when the caller passes `deliver: {email, toAddress}`, recorded in `OutboundCommunication`
+   idempotently by `registrationId`. Both also accept an optional `mergeFields` object — caller-
+   supplied placeholders merged on top of `collectMemberData`'s profile/subscription/account
+   fields (e.g. events-service passes `EventTitle`/`EventDate`/`CpdCredits`/`AccreditationBody`/
+   `CertificationType` for a certificate, since `collectMemberData` has no way to know about the
+   calling service's own domain). Both variants convert the merged docx to PDF via
+   `services/docxPdfConversion.service.js` (the same LibreOffice/`soffice` step gap/graduation
+   letters already use — requires LibreOffice installed, see `dev-commands.md`) before uploading
+   — as of this change, `GeneratedLetter.contentType` is `"pdf"` here, not `"docx"`. No frontend
+   page currently calls `/api/letters/generate` directly (only events-service does, for
+   certificates), so this was a safe global change with no other caller to break.
 
 2. **Bulk email campaigns** (`services/campaignEngine.service.js`) — `Campaign` +
    `CampaignRecipient` documents. `expandRecipientsForCampaign` resolves `audienceProfileIds` to

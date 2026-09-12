@@ -11,10 +11,16 @@ Practical consequence: any route **not** wrapped in `requirePermission(...)` get
 all — `req.userId`/`req.tenantId` will be `undefined` there. Routes deliberately left unwrapped
 because they authenticate a different way or don't need identity: `POST
 /api/campaigns/system/process-due`, `GET /api/campaigns/unsubscribe`, the SNS webhook (see the
-SES/SNS webhook topic), and `correspondence.routes.js`'s two `/internal/letters/*` routes (guarded
-by a `requireInternal(req)` check *inside* the controller body instead of route middleware — checks
-`x-internal-request`). When adding a new route, decide up front whether it needs
-`requirePermission` — there is no fallback that sets identity for free.
+SES/SNS webhook topic), `correspondence.routes.js`'s two `/internal/letters/*` routes, and
+`letter.routes.js`'s `POST /api/letters/internal/generate` (all guarded by a `requireInternal(req)`
+check *inside* the controller body instead of route middleware — checks `x-internal-request`).
+`generateLetterInternal` is the system-triggered twin of `generateLetter` (`/api/letters/generate`)
+— used by events-service's certificate auto-issuance (no originating CRM user to forward a JWT
+from), reads `tenantId` from the `x-tenant-id` header instead of a verified JWT, and additionally
+accepts an optional `deliver: {email, toAddress}` to email the generated document as an attachment
+via `sendSesMessage` (idempotent via `OutboundCommunication`, keyed off `registrationId`). When
+adding a new route, decide up front whether it needs `requirePermission` — there is no fallback
+that sets identity for free.
 
 When working from the full `projectShell` checkout, a new route under `routes/*.routes.js` with no
 `requirePermission(...)` in its middleware chain is mechanically blocked by
