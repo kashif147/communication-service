@@ -1,12 +1,14 @@
 import { Router } from "express";
 import { generateLetter, generateLetterInternal } from "../controllers/letter.controller.js";
 import { defaultPolicyMiddleware } from "../middlewares/policy.middleware.js";
+import { tenantContextWarn } from "../middlewares/tenantContext.mw.js";
 
 const router = Router();
 
 router.post(
   "/generate",
   defaultPolicyMiddleware.requirePermission("communication", "create"),
+  tenantContextWarn,
   generateLetter
 );
 
