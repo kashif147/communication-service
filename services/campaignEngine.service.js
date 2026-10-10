@@ -225,6 +225,9 @@ export async function runCampaignSend(campaignId, authorizationHeader, actorId) 
           tags: {
             campaignId: String(campaignId),
             memberId: rec.memberId,
+            // Lets the SNS/SES feedback handler cross-check the tenant it
+            // derives from the matched recipient/campaign record.
+            tenantId: String(rec.tenantId || campaign.tenantId || ""),
           },
         });
 

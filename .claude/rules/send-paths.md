@@ -9,7 +9,8 @@
    `POST /api/letters/internal/generate` (`generateLetterInternal`) is the system-triggered twin
    for callers with no originating user (events-service's certificate auto-issuance) — see
    `auth.md`. It optionally also emails the generated PDF as an attachment via `sendSesMessage`
-   when the caller passes `deliver: {email, toAddress}`, recorded in `OutboundCommunication`
+   when the caller passes `deliver: {email}`, always to the member's on-record email for that
+   tenant (never an arbitrary caller `toAddress`), recorded in `OutboundCommunication`
    idempotently by `registrationId`. Both also accept an optional `mergeFields` object — caller-
    supplied placeholders merged on top of `collectMemberData`'s profile/subscription/account
    fields (e.g. events-service passes `EventTitle`/`EventDate`/`CpdCredits`/`AccreditationBody`/

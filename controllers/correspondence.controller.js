@@ -3,26 +3,59 @@ import OutboundCommunication from "../model/outboundCommunication.model.js";
 import { generateDownloadUrl } from "../services/azureBlob.service.js";
 import { blobServiceClient, containerName } from "../config/azure.js";
 import { validateObjectId } from "../middlewares/validateInput.js";
-import { AppError } from "../errors/AppError.js";
+import {
+  isCrmUser,
+  getTrustedOwnProfileId,
+} from "../middlewares/internalCaller.js";
 
-function requireInternal(req) {
-  const ok =
-    req.headers["x-internal-request"] === "true" ||
-    req.headers["x-internal-request"] === "1";
-  if (!ok) {
-    throw AppError.forbidden("Internal endpoint: x-internal-request header required");
+/**
+ * Resolve the GeneratedLetter for an /internal/letters/* request, scoped to
+ * the caller. Route middleware (internalOrUserRead) has already classified the
+ * caller and pinned the tenant:
+ *  - internal-only caller: tenant = its x-tenant-id header (req.internalTenantId).
+ *  - user session: tenant = trusted user tenant (req.tenantId after
+ *    requirePermission + tenantContextWarn). CRM staff read any letter in their
+ *    tenant; anyone else (portal member) only a letter whose profileId is
+ *    their own trusted profile id. Otherwise null (-> 404, no existence leak).
+ * Body/query/params tenantId are never consulted.
+ */
+async function findLetterForCaller(req, letterId) {
+  if (req.callerKind === "internal") {
+    if (!req.internalTenantId) return null;
+    return GeneratedLetter.findOne({ _id: letterId, tenantId: req.internalTenantId }).lean();
   }
+  if (req.callerKind === "user") {
+    const tenantId = req.tenantId;
+    if (!tenantId || !req.userId) return null;
+    if (isCrmUser(req)) {
+      return GeneratedLetter.findOne({ _id: letterId, tenantId }).lean();
+    }
+    const ownProfileId = getTrustedOwnProfileId(req);
+    if (!ownProfileId) return null;
+    return GeneratedLetter.findOne({
+      _id: letterId,
+      tenantId,
+      $or: [{ profileId: ownProfileId }, { memberId: ownProfileId }],
+    }).lean();
+  }
+  return null;
+}
+
+// Internal callers keep the historical "not found" envelope (200 + data:null,
+// which notification-service's communicationLetterClient already handles);
+// user sessions get a real 404 for both "absent" and "not yours".
+function letterNotFound(req, res) {
+  if (req.callerKind === "user") return res.notFound("Letter not found");
+  return res.notFoundRecord("Letter not found");
 }
 
 export async function getLetterInternalById(req, res, next) {
   try {
-    requireInternal(req);
-    const tenantId = req.headers["x-tenant-id"] || req.tenantId;
     const { letterId } = req.params;
     validateObjectId(letterId, "letterId");
 
-    const doc = await GeneratedLetter.findOne({ _id: letterId, tenantId }).lean();
-    if (!doc) return res.notFoundRecord("Letter not found");
+    const doc = await findLetterForCaller(req, letterId);
+    if (!doc) return letterNotFound(req, res);
 
     const downloadUrl = doc.blobPath ? generateDownloadUrl(doc.blobPath) : null;
     return res.success({ letter: { ...doc, downloadUrl } });
@@ -33,13 +66,11 @@ export async function getLetterInternalById(req, res, next) {
 
 export async function downloadLetterBufferInternal(req, res, next) {
   try {
-    requireInternal(req);
-    const tenantId = req.headers["x-tenant-id"] || req.tenantId;
     const { letterId } = req.params;
     validateObjectId(letterId, "letterId");
 
-    const doc = await GeneratedLetter.findOne({ _id: letterId, tenantId }).lean();
-    if (!doc?.blobPath) return res.notFoundRecord("Letter not found");
+    const doc = await findLetterForCaller(req, letterId);
+    if (!doc?.blobPath) return letterNotFound(req, res);
 
     const container = blobServiceClient.getContainerClient(containerName);
     const blob = container.getBlockBlobClient(doc.blobPath);

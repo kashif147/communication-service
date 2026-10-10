@@ -12,13 +12,21 @@ all — `req.userId`/`req.tenantId` will be `undefined` there. Routes deliberate
 because they authenticate a different way or don't need identity: `POST
 /api/campaigns/system/process-due`, `GET /api/campaigns/unsubscribe`, the SNS webhook (see the
 SES/SNS webhook topic), `correspondence.routes.js`'s two `/internal/letters/*` routes, and
-`letter.routes.js`'s `POST /api/letters/internal/generate` (all guarded by a `requireInternal(req)`
-check *inside* the controller body instead of route middleware — checks `x-internal-request`).
+`letter.routes.js`'s `POST /api/letters/internal/generate`. The internal routes use
+`middlewares/internalCaller.js`: a request with `x-internal-request` and **no** user identity
+(the DEV gateway strips client-supplied `x-internal-request`) is an internal caller scoped to its
+`x-tenant-id` header (body/query tenantId ignored, missing header = 400). A request carrying user
+identity (gateway headers or a bearer token) gets nothing from the internal flag:
+`/internal/letters/*` runs `requirePermission("communication","read")` + `tenantContextWarn` and
+then requires a CRM user (or a trusted own-profile match, which no identity source provides yet,
+so portal members get 404); `/letters/internal/generate` rejects user sessions with 403.
 `generateLetterInternal` is the system-triggered twin of `generateLetter` (`/api/letters/generate`)
-— used by events-service's certificate auto-issuance (no originating CRM user to forward a JWT
-from), reads `tenantId` from the `x-tenant-id` header instead of a verified JWT, and additionally
-accepts an optional `deliver: {email, toAddress}` to email the generated document as an attachment
-via `sendSesMessage` (idempotent via `OutboundCommunication`, keyed off `registrationId`). When
+— used by events-service's certificate auto-issuance — and accepts an optional
+`deliver: {email, toAddress}` to email the PDF. The destination is always the member's on-record
+email for that tenant (`services/letterRecipient.service.js`, via profile-service batch +
+`pickEmail`); a caller `toAddress` is used only if it is one of that member's own emails. Delivery
+is idempotent via `OutboundCommunication` (`certificate-issuance:<registrationId>`, an existing
+`sent` record is never re-sent). When
 adding a new route, decide up front whether it needs `requirePermission` — there is no fallback
 that sets identity for free.
 

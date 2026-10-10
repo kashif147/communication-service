@@ -5,7 +5,13 @@ dotenvFlow.config({ node_env: "staging" });
 
 import { connectDB, disconnectDB } from "../config/db.js";
 import BookmarkField from "../model/bookmarkField.model.js";
+import { systemBookmarkFilter } from "../services/bookmarkFieldScope.service.js";
 import logger from "../config/logger.js";
+
+// These are platform-global SYSTEM rows (tenantId null, scope "system"),
+// readable by every tenant and overridable per tenant by key. Tenant rows are
+// never touched by this script. Run scripts/migrate-bookmark-fields-tenant-scope.js
+// first on a database that still has the legacy global key_1 index.
 
 // Bookmark fields to create based on profile and subscription models
 const bookmarkFields = [
@@ -61,19 +67,24 @@ async function createBookmarkFields() {
 
     for (const fieldData of bookmarkFields) {
       try {
-        const existing = await BookmarkField.findOne({ key: fieldData.key });
-        
+        const existing = await BookmarkField.findOne({
+          key: fieldData.key,
+          ...systemBookmarkFilter(),
+        });
+
         if (existing) {
-          // Update existing field
+          // Update existing system field (also stamps legacy rows as system)
           existing.label = fieldData.label;
           existing.path = fieldData.path;
           existing.dataType = fieldData.dataType;
+          existing.tenantId = null;
+          existing.scope = "system";
           await existing.save();
           updated++;
           console.log(`   ✓ Updated: ${fieldData.key}`);
         } else {
           // Create new field
-          await BookmarkField.create(fieldData);
+          await BookmarkField.create({ ...fieldData, tenantId: null, scope: "system" });
           created++;
           console.log(`   ✓ Created: ${fieldData.key}`);
         }
@@ -97,8 +108,8 @@ async function createBookmarkFields() {
     console.log(`📦 Total: ${bookmarkFields.length}`);
 
     // Verify all fields exist
-    const allFields = await BookmarkField.find();
-    console.log(`\n📋 Total bookmark fields in database: ${allFields.length}`);
+    const allFields = await BookmarkField.find(systemBookmarkFilter());
+    console.log(`\n📋 Total system bookmark fields in database: ${allFields.length}`);
 
     // List all fields
     console.log("\n📝 Bookmark Fields:");

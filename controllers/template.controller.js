@@ -1,5 +1,5 @@
 import Template from "../model/template.model.js";
-import BookmarkField from "../model/bookmarkField.model.js";
+import { getEffectiveBookmarkFields } from "../services/bookmarkFieldScope.service.js";
 import {
   getOneDriveFile,
   uploadOneDriveFile,
@@ -71,7 +71,7 @@ export async function uploadTemplate(req, res, next) {
     }
 
     // Get bookmark field keys for validation (placeholders should match bookmark keys)
-    const bookmarkFields = await BookmarkField.find({}, { key: 1 });
+    const bookmarkFields = await getEffectiveBookmarkFields(req.tenantId);
     const validBookmarkKeys = bookmarkFields.map((f) => f.key);
 
     // Process placeholders - accept from body or extract from file
@@ -460,7 +460,7 @@ export async function updateTemplate(req, res, next) {
       }
 
       // Get bookmark field keys for validation
-      const bookmarkFields = await BookmarkField.find({}, { key: 1 });
+      const bookmarkFields = await getEffectiveBookmarkFields(req.tenantId);
       const validBookmarkKeys = bookmarkFields.map((f) => f.key);
 
       // Process placeholders - accept from body or extract from file

@@ -1,4 +1,4 @@
-import BookmarkField from "../model/bookmarkField.model.js";
+import { getEffectiveBookmarkFields } from "./bookmarkFieldScope.service.js";
 import { fetchTenantRecord } from "./tenant.service.client.js";
 
 const MONTH_SHORT = [
@@ -203,7 +203,10 @@ export async function buildBookmarkMergeMap({
   tenantId,
   req,
 }) {
-  const fields = await BookmarkField.find({}).lean();
+  // System rows + this tenant's own rows (tenant row wins per key). A merge
+  // without a tenant is refused rather than reading every tenant's fields.
+  if (!tenantId) throw new Error("buildBookmarkMergeMap: tenantId is required");
+  const fields = await getEffectiveBookmarkFields(tenantId);
   const profileDoc = profile && typeof profile === "object" ? { ...profile } : {};
   if (profileDoc.professionalDetails) {
     profileDoc.professionalInfo = {
