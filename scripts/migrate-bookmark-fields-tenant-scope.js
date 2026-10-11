@@ -50,7 +50,9 @@ async function indexNames(coll) {
 }
 
 async function main() {
-  await connectDB();
+  // autoIndex off: importing the model must not build tenantId_1_key_1 behind
+  // the dry run's back (connectDB enables autoIndex outside production).
+  await connectDB(undefined, { autoIndex: false });
   const coll = BookmarkField.collection;
   try {
     // 1. Preflight
