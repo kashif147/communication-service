@@ -38,6 +38,8 @@ dotenvFlow.config();
 
 import { connectDB, disconnectDB } from "../config/db.js";
 import BookmarkField from "../model/bookmarkField.model.js";
+import mongoose from "mongoose";
+import { assertMigrationTarget } from "./lib/migrationTargetGuard.js";
 
 const APPLY = process.argv.includes("--apply");
 const NEW_INDEX = "tenantId_1_key_1";
@@ -55,6 +57,7 @@ async function main() {
   await connectDB(undefined, { autoIndex: false });
   const coll = BookmarkField.collection;
   try {
+    assertMigrationTarget(mongoose.connection.name, process.argv.slice(2), { apply: APPLY });
     // 1. Preflight
     const before = await indexNames(coll);
     const total = await coll.countDocuments({});
