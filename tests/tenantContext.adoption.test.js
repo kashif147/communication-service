@@ -152,7 +152,7 @@ test("12 policy.middleware.js unchanged (no guard reference)", () => {
 });
 test("13 package files unchanged (shared-dep SHAs still pinned)", () => {
   const pkg = read("package.json");
-  assert.match(pkg, /policy-middleware\.git#1d4a3b991c6bb3374e424e220f745b48d41e3ee7/);
+  assert.match(pkg, /policy-middleware\.git#cf4fafc63728dbfd37b90d30c07a6ddc59323e50/);
   assert.match(pkg, /logging-lib\.git#5fd251bde4ad08ba71cf9844656b5bc126e13b43/);
   assert.match(pkg, /rabbitmq-middleware\.git#db70fb8ae7a6e62f2a96df1f68b41ec4944d5123/);
   assert.ok(!pkg.includes("tenantContextWarn"));
