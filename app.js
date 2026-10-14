@@ -64,6 +64,7 @@ import {
 } from "@projectShell/logging-lib";
 import requestId from "./middlewares/requestId.js";
 import loggerMiddleware from "./middlewares/logger.mw.js";
+import { pinoHttpOptions } from "./middlewares/safeHttpLog.js";
 import responseMiddleware from "./middlewares/response.mw.js";
 import notFound from "./middlewares/notFound.js";
 import errorHandler from "./middlewares/errorHandler.js";
@@ -126,14 +127,8 @@ process.on("SIGINT", async () => {
   process.exit(0);
 });
 
-app.use(
-  pinoHttp({
-    logger,
-    autoLogging: {
-      ignore: (req) => req.path === "/health" || req.path.startsWith("/health/"),
-    },
-  })
-);
+// Allow-list serializers only: never headers (Authorization, cookies), bodies or query values.
+app.use(pinoHttp(pinoHttpOptions(logger)));
 // app.use(corsMiddleware);
 // Security headers with Helmet
 app.use(

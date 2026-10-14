@@ -1,4 +1,25 @@
 import logger from "../config/logger.js";
+import { routeOf, requestIds } from "./safeHttpLog.js";
+
+/**
+ * General request log - allow-list only (same model as user-service).
+ *
+ * One entry per request, written when the response ends, with safe metadata only: method, matched
+ * route (mount prefix kept on error paths), status, duration, correlation/request id and the
+ * internal userId / tenantId. Bodies, query strings, headers (Authorization, cookies, user agent)
+ * and anything derived from them are never logged. A new field is logged only by adding it here.
+ */
+export function requestLogEntry(req, res, durationMs) {
+  const entry = {
+    method: req.method,
+    route: routeOf(req),
+    status: res.headersSent ? res.statusCode : 0,
+    durationMs,
+    ...requestIds(req),
+  };
+  if (!res.writableFinished) entry.outcome = "aborted";
+  return entry;
+}
 
 export default function loggerMiddleware(req, res, next) {
   // Skip logging for health check endpoints
@@ -6,73 +27,17 @@ export default function loggerMiddleware(req, res, next) {
     return next();
   }
 
-  const startTime = Date.now();
-
-  const logData = {
-    method: req.method,
-    url: req.url,
-    path: req.path,
-    query: req.query,
-    userAgent: req.get("User-Agent"),
-    ip: req.ip || req.connection.remoteAddress,
-    requestId: req.id,
-    user: req.user?.id,
-    tenantId: req.tenantId,
+  const start = process.hrtime.bigint();
+  let logged = false;
+  const log = () => {
+    if (logged) return;
+    logged = true;
+    const durationMs = Number((process.hrtime.bigint() - start) / 1000000n);
+    const entry = requestLogEntry(req, res, durationMs);
+    if (entry.status >= 400 || entry.status === 0) logger.warn(entry, "HTTP request");
+    else logger.info(entry, "HTTP request");
   };
-
-  if (
-    ["POST", "PUT", "PATCH"].includes(req.method) &&
-    req.body &&
-    Object.keys(req.body).length
-  ) {
-    const sanitizedBody = sanitizeRequestBody(req.body);
-    logData.body = sanitizedBody;
-  }
-
-  logger.info(logData, `Incoming ${req.method} ${req.url}`);
-
-  const originalEnd = res.end;
-  res.end = function (chunk, encoding) {
-    const duration = Date.now() - startTime;
-
-    const responseLog = {
-      method: req.method,
-      url: req.url,
-      statusCode: res.statusCode,
-      duration: `${duration}ms`,
-      requestId: req.id,
-      user: req.user?.id,
-      tenantId: req.tenantId,
-    };
-
-    if (res.statusCode >= 400) {
-      logger.warn(
-        responseLog,
-        `Response ${res.statusCode} for ${req.method} ${req.url}`
-      );
-    } else {
-      logger.info(
-        responseLog,
-        `Response ${res.statusCode} for ${req.method} ${req.url}`
-      );
-    }
-
-    originalEnd.call(this, chunk, encoding);
-  };
-
+  res.on("finish", log);
+  res.on("close", log);
   next();
 }
-
-function sanitizeRequestBody(body) {
-  const sensitiveFields = ["password", "token", "secret", "key", "authorization"];
-  const sanitized = { ...body };
-
-  sensitiveFields.forEach((field) => {
-    if (sanitized[field]) {
-      sanitized[field] = "[REDACTED]";
-    }
-  });
-
-  return sanitized;
-}
-
