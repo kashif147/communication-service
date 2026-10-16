@@ -1,0 +1,19 @@
+# Environment files hold credentials (MONGO_URI, GRAPH_DOCUMENT_CLIENT_SECRET, ...) and must never
+# be copied into an image (the Dockerfile does COPY . .). Runtime configuration comes from Compose
+# (env_file / environment); bin/communication-service.js's dotenv-flow does not override it and
+# simply finds no file in the image. Excluded at any depth.
+.env
+.env.*
+**/.env
+**/.env.*
+*.env
+**/*.env
+
+# Dependencies are installed inside the image (npm install), never copied from the host.
+node_modules
+
+# Local logs and VCS metadata.
+logs
+*.log
+.git
+.gitignore

@@ -63,7 +63,6 @@ Thumbs.db
 # Dockerfile
 # Dockerfile*
 # docker-compose*.yml
-.dockerignore
 
 # Build outputs
 dist/
