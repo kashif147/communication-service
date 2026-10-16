@@ -42,6 +42,13 @@ router.post(
   tenantContextWarn,
   createEmailTemplateRecord
 );
+// Static paths before the parameterised /:id routes, or /:id would capture them.
+router.get(
+  "/test-graph-token",
+  defaultPolicyMiddleware.requirePermission("communication", "read"),
+  tenantContextWarn,
+  testGraphToken
+);
 router.get(
   "/:id",
   defaultPolicyMiddleware.requirePermission("communication", "read"),
@@ -66,12 +73,6 @@ router.post(
   defaultPolicyMiddleware.requirePermission("communication", "write"),
   tenantContextWarn,
   extractPlaceholders
-);
-router.get(
-  "/test-graph-token",
-  defaultPolicyMiddleware.requirePermission("communication", "read"),
-  tenantContextWarn,
-  testGraphToken
 );
 
 export default router;
