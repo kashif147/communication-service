@@ -66,9 +66,9 @@ NODE_ENV=staging
 MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/Communication-Service?retryWrites=true&w=majority
 MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/Communication-Service?retryWrites=true&w=majority
 RABBIT_URL=amqp://guest:guest@rabbitmq-host:5672
-GRAPH_CLIENT_ID=your-microsoft-graph-client-id
-GRAPH_CLIENT_SECRET=your-microsoft-graph-client-secret
-GRAPH_TENANT_ID=your-microsoft-graph-tenant-id
+GRAPH_DOCUMENT_CLIENT_ID=your-document-storage-app-client-id
+GRAPH_DOCUMENT_CLIENT_SECRET=your-document-storage-app-client-secret
+GRAPH_DOCUMENT_TENANT_ID=your-directory-tenant-id
 AZURE_STORAGE_CONNECTION_STRING=your-azure-storage-connection-string
 AZURE_STORAGE_CONTAINER_NAME=your-container-name
 PROFILE_SERVICE_URL=https://profileserviceShell.azurewebsites.net
@@ -175,7 +175,7 @@ Look for:
 ### Issue: OneDrive/Graph API errors
 
 **Fix:**
-1. Verify `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `GRAPH_TENANT_ID` are set
+1. Verify `GRAPH_DOCUMENT_CLIENT_ID`, `GRAPH_DOCUMENT_CLIENT_SECRET`, `GRAPH_DOCUMENT_TENANT_ID` are set (the dedicated document-storage app; the old `GRAPH_*` names are no longer read)
 2. Check Graph API permissions in Azure AD
 3. Ensure service principal has required permissions
 

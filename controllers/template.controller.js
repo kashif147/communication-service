@@ -820,21 +820,16 @@ export async function testGraphToken(req, res, next) {
       return res.fail("User authentication required", 401);
     }
 
+    // Answers { tokenAcquired } only: never the token, any fragment of it, or Microsoft error text
+    // (graphAuth.service.js logs the safe failure details).
+    let tokenAcquired = false;
     try {
-      const token = await getGraphToken();
-      res.success(
-        {
-          tokenExists: !!token,
-          tokenLength: token?.length || 0,
-          tokenPrefix: token ? `${token.substring(0, 20)}...` : null,
-        },
-        "Graph token test successful"
-      );
-    } catch (tokenError) {
-      res.fail(`Failed to get Graph token: ${tokenError.message}`, 500, {
-        error: tokenError.message,
-      });
+      tokenAcquired = typeof (await getGraphToken()) === "string";
+    } catch {
+      tokenAcquired = false;
     }
+    if (tokenAcquired) return res.success({ tokenAcquired: true }, "Graph token check");
+    return res.fail("Graph token not available", 503, { tokenAcquired: false });
   } catch (error) {
     next(error);
   }

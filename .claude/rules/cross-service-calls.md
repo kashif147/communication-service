@@ -18,7 +18,9 @@ Notable integration points:
   documented in `audit-service`'s CLAUDE.md. It's fire-and-forget — failures are logged, never
   thrown. Don't make a request path depend on this call succeeding.
 - `services/onedrive.service.js`, `services/graphAuth.service.js` → Microsoft Graph, using an
-  app-only client-credentials token (`GRAPH_TENANT_ID`/`GRAPH_CLIENT_ID`/`GRAPH_CLIENT_SECRET`,
-  cached in-memory ~50-55 min) against a shared admin mailbox/site
+  app-only client-credentials token of the dedicated single-tenant document-storage application
+  (`GRAPH_DOCUMENT_TENANT_ID`/`GRAPH_DOCUMENT_CLIENT_ID`/`GRAPH_DOCUMENT_CLIENT_SECRET`, Graph
+  application permission `Files.ReadWrite.All` only; no fallback to the old `GRAPH_*` names, never
+  the shared CRM sign-in app; cached in-memory ~50-55 min) against a shared admin mailbox/site
   (`ONEDRIVE_USER_EMAIL`/`SHAREPOINT_SITE_ID`/`GRAPH_DRIVE_ID`) — templates are not per-user
-  files.
+  files. No token fragment or raw Microsoft error text is ever logged or returned.
