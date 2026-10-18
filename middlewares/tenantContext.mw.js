@@ -17,4 +17,4 @@ import { tenantContextMiddleware } from "@membership/policy-middleware";
  * tenantId that disagrees as a non-blocking TenantContextMismatch event. It
  * never returns 403.
  */
-export const tenantContextWarn = tenantContextMiddleware({ mode: "warn" });
+export const tenantContextWarn = tenantContextMiddleware();

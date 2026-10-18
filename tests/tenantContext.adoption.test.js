@@ -96,7 +96,8 @@ test("1 tenantContextWarn exists (exported, callable)", () => {
 });
 test("2 mode is warn; no enforce", () => {
   const src = read(path.join("middlewares", "tenantContext.mw.js"));
-  assert.match(src, /tenantContextMiddleware\(\{\s*mode:\s*"warn"\s*\}\)/);
+  assert.match(src, /tenantContextMiddleware\(\)/); // mode comes from TENANT_CONTEXT_MODE (default warn)
+  assert.ok(!/mode:\s*"warn"/.test(src), "no hard-coded warn override");
   assert.ok(!/mode:\s*"enforce"/.test(src));
 });
 test("3 template router: 8 guarded", () => assert.equal(guardCount("template.routes.js"), 8));
@@ -195,7 +196,8 @@ test("19 WARN only: mismatch is non-blocking (no 403, next called) and mode is w
   assert.equal(res.statusCode, null);
   assert.equal(nextCount, 1);
   const src = read(path.join("middlewares", "tenantContext.mw.js"));
-  assert.match(src, /mode:\s*"warn"/);
+  assert.match(src, /tenantContextMiddleware\(\)/); // mode comes from TENANT_CONTEXT_MODE (default warn)
+  assert.ok(!/mode:\s*"warn"/.test(src), "no hard-coded warn override");
   assert.ok(!/mode:\s*"enforce"/.test(src));
 });
 test("20 installed package exposes tenantContextMiddleware + resolveTenantContext", () => {
