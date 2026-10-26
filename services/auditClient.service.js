@@ -16,11 +16,19 @@ export async function logCampaignAudit(payload) {
     root = root.slice(0, -4);
   }
   const url = `${root}/internal/audit-logs`;
+  // Phase A / A1: audit-service takes the owning tenant only from the trusted internal headers.
+  // payload.tenantId is always this service's trusted tenant (req.tenantId or the stored campaign's
+  // tenantId), never caller input. Without one there is nothing to attribute the row to.
+  const tenantId = payload?.tenantId == null ? "" : String(payload.tenantId).trim();
+  if (!tenantId) {
+    logger.warn({ action: payload?.action }, "audit-service log skipped: no trusted tenant");
+    return;
+  }
   try {
     await axios.post(
       url,
       {
-        tenantId: payload.tenantId,
+        tenantId,
         action: payload.action,
         resourceType: payload.resourceType || "campaign",
         resourceId: payload.resourceId,
@@ -31,6 +39,8 @@ export async function logCampaignAudit(payload) {
         headers: {
           "Content-Type": "application/json",
           "x-service-secret": secret,
+          "x-internal-request": "true",
+          "x-tenant-id": tenantId,
         },
         timeout: 8000,
         validateStatus: (s) => s < 500,
