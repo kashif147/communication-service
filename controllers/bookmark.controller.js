@@ -1,6 +1,7 @@
 import BookmarkField from "../model/bookmarkField.model.js";
 import { sanitizeString, validateObjectId } from "../middlewares/validateInput.js";
 import { isSuperUser } from "../middlewares/internalCaller.js";
+import { globalDataFrozenError, isGlobalDataFrozen } from "../middlewares/globalDataFreeze.js";
 import {
   getEffectiveBookmarkFields,
   isSystemBookmarkRow,
@@ -72,6 +73,10 @@ export async function createBookmarkField(req, res, next) {
 
     // Owner comes only from the trusted context; body tenantId is ignored.
     const wantsSystem = String(scope || "").toLowerCase() === "system";
+    // Phase A / A14: system rows are shared by every tenant - frozen for every caller, SU included.
+    if (wantsSystem && isGlobalDataFrozen()) {
+      return next(globalDataFrozenError("bookmarkField"));
+    }
     if (wantsSystem && !isSuperUser(req)) {
       return res.fail("Only a platform administrator can create system bookmark fields", 403);
     }
@@ -108,6 +113,9 @@ export async function updateBookmarkField(req, res, next) {
     const field = await findVisibleRow(id, req.tenantId);
     if (!field) {
       return res.notFound("Bookmark field not found");
+    }
+    if (isSystemBookmarkRow(field) && isGlobalDataFrozen()) {
+      return next(globalDataFrozenError("bookmarkField"));
     }
     if (isSystemBookmarkRow(field) && !isSuperUser(req)) {
       return res.fail("System bookmark fields can only be modified by a platform administrator", 403);
@@ -175,6 +183,9 @@ export async function deleteBookmarkField(req, res, next) {
     const field = await findVisibleRow(id, req.tenantId);
     if (!field) {
       return res.notFound("Bookmark field not found");
+    }
+    if (isSystemBookmarkRow(field) && isGlobalDataFrozen()) {
+      return next(globalDataFrozenError("bookmarkField"));
     }
     if (isSystemBookmarkRow(field) && !isSuperUser(req)) {
       return res.fail("System bookmark fields can only be deleted by a platform administrator", 403);

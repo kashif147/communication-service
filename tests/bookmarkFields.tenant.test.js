@@ -57,6 +57,19 @@ async function call(handler, req) {
   return res;
 }
 
+// Phase A / A14: system rows are write-frozen by default (tests/bookmarkFreeze.a14.test.js). The
+// SU / non-SU rules below still apply behind the freeze; they run in the ops rollback mode.
+async function withWritesOpen(fn) {
+  const prev = process.env.GLOBAL_DATA_WRITES;
+  process.env.GLOBAL_DATA_WRITES = "open";
+  try {
+    return await fn();
+  } finally {
+    if (prev === undefined) delete process.env.GLOBAL_DATA_WRITES;
+    else process.env.GLOBAL_DATA_WRITES = prev;
+  }
+}
+
 const PROFILE = {
   personalInfo: { forename: "Ann", surname: "Byrne", title: "Ms", knownAs: "Annie" },
   membershipNumber: "M-1",
@@ -154,7 +167,7 @@ test("B7 tenant A (non-SU) cannot delete tenant B's row -> 404, row kept", async
   }
 });
 
-test("B8 tenant admin (non-SU) cannot edit or delete a system row -> 403", async () => {
+test("B8 tenant admin (non-SU) cannot edit or delete a system row -> 403 (writes open)", () => withWritesOpen(async () => {
   const m = seed();
   try {
     const up = await call(ctrl.updateBookmarkField, userReq(TENANT_A, { params: { id: SYS_SURNAME }, body: { path: "profile.x" } }));
@@ -166,7 +179,7 @@ test("B8 tenant admin (non-SU) cannot edit or delete a system row -> 403", async
   } finally {
     m.restore();
   }
-});
+}));
 
 test("B9 tenant A can update and delete its own row", async () => {
   const m = seed();
@@ -185,7 +198,7 @@ test("B9 tenant A can update and delete its own row", async () => {
   }
 });
 
-test("B10 SU can update a system row", async () => {
+test("B10 SU can update a system row (writes open)", () => withWritesOpen(async () => {
   const m = seed();
   try {
     const res = await call(ctrl.updateBookmarkField, suReq(TENANT_A, { params: { id: SYS_SURNAME }, body: { label: "Family name" } }));
@@ -196,7 +209,7 @@ test("B10 SU can update a system row", async () => {
   } finally {
     m.restore();
   }
-});
+}));
 
 test("B11 create stamps the trusted tenant (body tenantId ignored); same key allowed in another tenant", async () => {
   const m = seed();
@@ -213,7 +226,7 @@ test("B11 create stamps the trusted tenant (body tenantId ignored); same key all
   }
 });
 
-test("B12 non-SU cannot create a system row -> 403; SU can (tenantId null)", async () => {
+test("B12 non-SU cannot create a system row -> 403; SU can (tenantId null) (writes open)", () => withWritesOpen(async () => {
   const m = seed();
   try {
     const denied = await call(ctrl.createBookmarkField, userReq(TENANT_A, { body: { key: "newSys", label: "x", path: "profile.x", scope: "system" } }));
@@ -227,7 +240,7 @@ test("B12 non-SU cannot create a system row -> 403; SU can (tenantId null)", asy
   } finally {
     m.restore();
   }
-});
+}));
 
 test("B13 duplicate key within the same tenant -> 409", async () => {
   const m = seed();
