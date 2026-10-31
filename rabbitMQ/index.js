@@ -34,6 +34,10 @@ import {
   handleIssuesIssueCreated,
   ROUTING_KEYS as ISSUES_ROUTING_KEYS,
 } from "./listeners/issues.listener.js";
+import {
+  handlePaymentLinkEmailRequested,
+  ROUTING_KEY as PAYMENT_LINK_EMAIL_ROUTING_KEY,
+} from "./listeners/paymentLinkComms.listener.js";
 
 // Initialize event system
 export async function initEventSystem() {
@@ -192,6 +196,23 @@ export async function setupConsumers() {
     logger.info("Issue Management events consumer ready", {
       queue: ISSUES_QUEUE,
       routingKeys: Object.values(ISSUES_ROUTING_KEYS),
+    });
+
+    // Application payment-link email (application.events exchange, published by
+    // profile-service's payment-link outbox). application.events is one of the middleware's
+    // default exchanges, so it is not asserted again here.
+    const APPLICATION_QUEUE = "communication-service.application.events";
+    // 24 h TTL (not 1 h like the other queues): a Checkout link lives up to 24 h, so a
+    // request older than that is useless, but a shorter outage must not drop the email.
+    await consumer.createQueue(APPLICATION_QUEUE, { durable: true, messageTtl: 86400000 });
+    await consumer.bindQueue(APPLICATION_QUEUE, "application.events", [
+      PAYMENT_LINK_EMAIL_ROUTING_KEY,
+    ]);
+    consumer.registerHandler(PAYMENT_LINK_EMAIL_ROUTING_KEY, handlePaymentLinkEmailRequested);
+    await consumer.consume(APPLICATION_QUEUE, { prefetch: 10 });
+    logger.info("Application payment-link email consumer ready", {
+      queue: APPLICATION_QUEUE,
+      routingKeys: [PAYMENT_LINK_EMAIL_ROUTING_KEY],
     });
 
     logger.info("All consumers set up successfully");
