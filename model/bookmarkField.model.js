@@ -5,7 +5,8 @@ import mongoose from "mongoose";
  *
  * Two ownership scopes:
  *  - "system": platform-global row, tenantId null. Readable by every tenant,
- *    writable only by a platform super-user (role SU).
+ *    platform-managed: no tenant role may write it (Phase B / Z9: the legacy SU
+ *    that could is retired; A14 keeps it frozen).
  *  - "tenant": owned by exactly one tenant (tenantId set). Readable/writable
  *    only inside that tenant; overrides a system row with the same `key` for
  *    that tenant at merge time.
