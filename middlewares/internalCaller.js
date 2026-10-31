@@ -48,18 +48,6 @@ export function classifyCaller(req) {
   return { kind: "none" };
 }
 
-function roleCodes(req) {
-  // Only the PDP-confirmed identity (set by requirePermission after PERMIT);
-  // never raw headers.
-  const roles = req.user?.roles || req.roles || [];
-  return (Array.isArray(roles) ? roles : []).map((r) => (typeof r === "string" ? r : r?.code)).filter(Boolean);
-}
-
-/** Platform super-user (role code "SU", same convention as user-service). ASU is a tenant admin, not platform. */
-export function isSuperUser(req) {
-  return roleCodes(req).includes("SU");
-}
-
 /** CRM staff user, from the PDP-confirmed identity only. */
 export function isCrmUser(req) {
   const t = String(req.user?.userType || "").toUpperCase();

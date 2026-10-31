@@ -1,6 +1,5 @@
 import BookmarkField from "../model/bookmarkField.model.js";
 import { sanitizeString, validateObjectId } from "../middlewares/validateInput.js";
-import { isSuperUser } from "../middlewares/internalCaller.js";
 import { globalDataFrozenError, isGlobalDataFrozen } from "../middlewares/globalDataFreeze.js";
 import {
   getEffectiveBookmarkFields,
@@ -77,8 +76,10 @@ export async function createBookmarkField(req, res, next) {
     if (wantsSystem && isGlobalDataFrozen()) {
       return next(globalDataFrozenError("bookmarkField"));
     }
-    if (wantsSystem && !isSuperUser(req)) {
-      return res.fail("Only a platform administrator can create system bookmark fields", 403);
+    // Phase B / Z9: system rows are platform-managed - no tenant role (the retired SU included, ASU included)
+    // may write them; there is no tenant path even when ops re-open GLOBAL_DATA_WRITES (403, not a write).
+    if (wantsSystem) {
+      return res.fail("System bookmark fields are platform-managed and cannot be created by a tenant role", 403);
     }
 
     const field = await BookmarkField.create({
@@ -117,8 +118,9 @@ export async function updateBookmarkField(req, res, next) {
     if (isSystemBookmarkRow(field) && isGlobalDataFrozen()) {
       return next(globalDataFrozenError("bookmarkField"));
     }
-    if (isSystemBookmarkRow(field) && !isSuperUser(req)) {
-      return res.fail("System bookmark fields can only be modified by a platform administrator", 403);
+    if (isSystemBookmarkRow(field)) {
+      // Phase B / Z9: platform-managed; never a tenant role (see create).
+      return res.fail("System bookmark fields are platform-managed and cannot be modified by a tenant role", 403);
     }
 
     // tenantId/scope are never taken from the body: a row cannot be moved
@@ -187,8 +189,9 @@ export async function deleteBookmarkField(req, res, next) {
     if (isSystemBookmarkRow(field) && isGlobalDataFrozen()) {
       return next(globalDataFrozenError("bookmarkField"));
     }
-    if (isSystemBookmarkRow(field) && !isSuperUser(req)) {
-      return res.fail("System bookmark fields can only be deleted by a platform administrator", 403);
+    if (isSystemBookmarkRow(field)) {
+      // Phase B / Z9: platform-managed; never a tenant role (see create).
+      return res.fail("System bookmark fields are platform-managed and cannot be deleted by a tenant role", 403);
     }
 
     const deleted = await BookmarkField.findOneAndDelete(ownerFilter(id, field));

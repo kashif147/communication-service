@@ -123,8 +123,11 @@ test("only GLOBAL_DATA_WRITES=open (exact) reopens; nothing on the request does"
       assert.equal(r.statusCode, 423, `value ${JSON.stringify(v)}`);
     }
     process.env.GLOBAL_DATA_WRITES = "open";
-    const opened = await call(ctrl.updateBookmarkField, req(A, "SU", { params: { id: SYS }, body: { label: "Family name" } }));
-    assert.equal(opened.statusCode, 200);
+    // Phase B / Z9: re-opening never makes a tenant role (the retired SU, ASU) a platform writer -> 403, not a write
+    for (const role of ["SU", "ASU"]) {
+      const opened = await call(ctrl.updateBookmarkField, req(A, role, { params: { id: SYS }, body: { label: "Family name" } }));
+      assert.equal(opened.statusCode, 403);
+    }
   } finally {
     delete process.env.GLOBAL_DATA_WRITES;
     m.restore();
