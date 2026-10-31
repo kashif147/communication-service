@@ -198,13 +198,16 @@ test("B9 tenant A can update and delete its own row", async () => {
   }
 });
 
-test("B10 SU can update a system row (writes open)", () => withWritesOpen(async () => {
+test("B10 Phase B / Z9: no tenant role (the retired SU, ASU) can update a system row, even with writes open -> 403", () => withWritesOpen(async () => {
   const m = seed();
   try {
-    const res = await call(ctrl.updateBookmarkField, suReq(TENANT_A, { params: { id: SYS_SURNAME }, body: { label: "Family name" } }));
-    assert.equal(res.statusCode, 200);
+    for (const r of [suReq(TENANT_A, { params: { id: SYS_SURNAME }, body: { label: "Family name" } }),
+                     userReq(TENANT_A, { user: { id: "asu", tenantId: TENANT_A, roles: [{ code: "ASU" }] }, params: { id: SYS_SURNAME }, body: { label: "Family name" } })]) {
+      const res = await call(ctrl.updateBookmarkField, r);
+      assert.equal(res.statusCode, 403);
+    }
     const row = m.store.find((d) => d._id === SYS_SURNAME);
-    assert.equal(row.label, "Family name");
+    assert.notEqual(row.label, "Family name");
     assert.equal(row.tenantId, null);
   } finally {
     m.restore();
@@ -226,17 +229,16 @@ test("B11 create stamps the trusted tenant (body tenantId ignored); same key all
   }
 });
 
-test("B12 non-SU cannot create a system row -> 403; SU can (tenantId null) (writes open)", () => withWritesOpen(async () => {
+test("B12 no tenant role can create a system row -> 403 (Phase B / Z9: SU retired) (writes open)", () => withWritesOpen(async () => {
   const m = seed();
   try {
     const denied = await call(ctrl.createBookmarkField, userReq(TENANT_A, { body: { key: "newSys", label: "x", path: "profile.x", scope: "system" } }));
     assert.equal(denied.statusCode, 403);
     assert.equal(m.store.find((d) => d.key === "newSys"), undefined);
-    const ok = await call(ctrl.createBookmarkField, suReq(TENANT_A, { body: { key: "newSys", label: "x", path: "profile.x", scope: "system" } }));
-    assert.equal(ok.statusCode, 201);
-    const row = m.store.find((d) => d.key === "newSys");
-    assert.equal(row.tenantId, null);
-    assert.equal(row.scope, "system");
+    // Phase B / Z9: the retired SU is no longer a platform writer - also 403, nothing created
+    const su = await call(ctrl.createBookmarkField, suReq(TENANT_A, { body: { key: "newSys", label: "x", path: "profile.x", scope: "system" } }));
+    assert.equal(su.statusCode, 403);
+    assert.equal(m.store.find((d) => d.key === "newSys"), undefined);
   } finally {
     m.restore();
   }
