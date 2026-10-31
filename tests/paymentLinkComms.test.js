@@ -128,16 +128,24 @@ test("redelivery of the same event does not send twice; a RESEND (new dedupeKey)
   }
 });
 
-test("tenant comes from the envelope only; data.tenantId is ignored; no envelope tenant -> skipped, nothing sent", async () => {
+test("tenant comes from the envelope only: body-only, malformed and mismatched tenants are refused; nothing recorded or sent", async () => {
   const s = seed();
   try {
-    await run(event({ tenantId: TENANT_B }));
-    assert.equal(s.outbound.store[0].tenantId, TENANT_A);
-
-    const r = await run(event({ dedupeKey: "k2", tenantId: TENANT_A }, { tenantId: undefined }));
-    assert.equal(r.reason, "missing_tenant");
+    // envelope A, body B (and the reverse): refused - a body tenant never re-routes or passes
+    assert.equal((await run(event({ tenantId: TENANT_B }))).reason, "tenant_mismatch");
+    assert.equal((await run(event({ dedupeKey: "k-rev", tenantId: TENANT_A }, { tenantId: TENANT_B }))).reason, "tenant_mismatch");
+    // body-only tenant: no envelope -> refused
+    assert.equal((await run(event({ dedupeKey: "k2", tenantId: TENANT_A }, { tenantId: undefined }))).reason, "missing_tenant");
+    // envelope not an internal tenant id
+    for (const bad of ["MULTIAUTH", "9188040d-6c67-4c5b-b112-36a304b66dad", "AAAAAAAAAAAAAAAAAAAAAAAA", { $ne: null }]) {
+      assert.equal((await run(event({ dedupeKey: `k-bad-${JSON.stringify(bad)}` }, { tenantId: bad }))).reason, "invalid_tenant", JSON.stringify(bad));
+    }
+    assert.equal(s.sent.length, 0);
+    assert.equal(s.outbound.store.length, 0);
+    // matching body copy (or none) is accepted under the envelope tenant
+    await run(event({ dedupeKey: "k-same", tenantId: TENANT_A }));
     assert.equal(s.sent.length, 1);
-    assert.equal(s.outbound.store.length, 1);
+    assert.equal(s.outbound.store[0].tenantId, TENANT_A);
   } finally {
     s.restore();
   }

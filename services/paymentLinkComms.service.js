@@ -131,23 +131,38 @@ async function recordOutbound({ tenantId, applicationId, idempotencyKey, status,
 
 /**
  * applications.payment-link.email.requested.v1 -> one email to the recipient profile-service
- * resolved (it owns the contact data). Tenant comes from the event envelope only; a tenant in
- * `data` is never used. Deduped per event on data.dedupeKey (each RESEND carries a new
+ * resolved (it owns the contact data). Tenant comes from the event envelope only and must be an
+ * internal tenant id; a `data.tenantId` that differs from it refuses the event (nothing recorded
+ * or sent) - a body tenant is never used. Deduped per event on data.dedupeKey (each RESEND carries a new
  * `:email:{seq}` key, so a resend is a new email while a redelivery is not).
  *
  * Permanent problems (bad payload, unsafe URL, expired link, no address) are recorded and
  * acknowledged; an SES failure is recorded and rethrown so the consumer retries.
  * Never logs the checkout URL or the recipient address.
  */
+const INTERNAL_TENANT_ID = /^[0-9a-f]{24}$/;
+
 export async function processPaymentLinkEmail(payload, { now = new Date() } = {}) {
   const tenantId = typeof payload?.tenantId === "string" ? payload.tenantId.trim() : "";
   const data = payload?.data || {};
   const { applicationId, linkVersion, dedupeKey, templateCode } = data;
   const logCtx = { applicationId, linkVersion, dedupeKey, eventId: payload?.eventId };
 
+  if (payload?.tenantId != null && typeof payload.tenantId !== "string") {
+    logger.warn(logCtx, "paymentLinkComms: envelope tenant is not an internal tenant id; skipping");
+    return { ok: false, reason: "invalid_tenant" };
+  }
   if (!tenantId) {
     logger.warn(logCtx, "paymentLinkComms: no envelope tenant; skipping");
     return { ok: false, reason: "missing_tenant" };
+  }
+  if (!INTERNAL_TENANT_ID.test(tenantId)) {
+    logger.warn(logCtx, "paymentLinkComms: envelope tenant is not an internal tenant id; skipping");
+    return { ok: false, reason: "invalid_tenant" };
+  }
+  if (data.tenantId != null && (typeof data.tenantId !== "string" || (data.tenantId.trim() && data.tenantId.trim() !== tenantId))) {
+    logger.warn(logCtx, "paymentLinkComms: envelope and data tenant differ; skipping");
+    return { ok: false, reason: "tenant_mismatch" };
   }
   if (!applicationId || !dedupeKey) {
     logger.warn(logCtx, "paymentLinkComms: missing applicationId/dedupeKey; skipping");
