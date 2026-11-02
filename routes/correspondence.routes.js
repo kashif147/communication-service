@@ -7,6 +7,7 @@ import {
 } from "../controllers/correspondence.controller.js";
 import { defaultPolicyMiddleware } from "../middlewares/policy.middleware.js";
 import { tenantContextWarn } from "../middlewares/tenantContext.mw.js";
+import { requireCrmUser } from "../middlewares/requireCrmUser.js";
 import { internalOrUserRead } from "../middlewares/internalCaller.js";
 
 const router = Router();
@@ -30,6 +31,7 @@ router.get(
   "/letters/profile/:profileId",
   defaultPolicyMiddleware.requirePermission("communication", "read"),
   tenantContextWarn,
+  requireCrmUser,
   listLettersByProfile
 );
 
@@ -37,6 +39,7 @@ router.get(
   "/correspondence/profile/:profileId",
   defaultPolicyMiddleware.requirePermission("communication", "read"),
   tenantContextWarn,
+  requireCrmUser,
   listCorrespondenceByProfile
 );
 
