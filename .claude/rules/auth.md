@@ -30,6 +30,18 @@ is idempotent via `OutboundCommunication` (`certificate-issuance:<registrationId
 adding a new route, decide up front whether it needs `requirePermission` — there is no fallback
 that sets identity for free.
 
+**Staff-only gate (P5).** A portal member's token can carry `communication:*`, so the permission
+alone does not separate staff from members. Every `requirePermission` route in the five routers
+(campaigns, templates, bookmark fields, `/letters/generate`, `/letters/profile/:id`,
+`/correspondence/profile/:id`) is CRM-only via `middlewares/requireCrmUser.js` (403 `CRM_ONLY` for
+PORTAL, missing or unknown `userType`, read from the PDP-verified `req.user` only). It must sit
+**after** `requirePermission` — `requirePermission(...) -> tenantContextWarn -> requireCrmUser ->
+handler` — because `req.user` does not exist before the PDP call. The portal app does not call
+any of these routes; if a portal self-service letter view is ever added, it needs a trusted
+own-profile binding (see `getTrustedOwnProfileId`) rather than relaxing this gate. A new
+staff-facing route gets the same three-middleware chain (`tests/portalAuthz.p5.test.js` M2 counts
+them).
+
 When working from the full `projectShell` checkout, a new route under `routes/*.routes.js` with no
 `requirePermission(...)` in its middleware chain is mechanically blocked by
 `.claude/hooks/enforce-hard-rules.mjs` (root-level `PreToolUse` hook), unless its path matches
